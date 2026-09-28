@@ -32,22 +32,33 @@ const DEMO_CUSTOMERS = [
         status: "Active"
     },
     {
-        user_id: 3,
-        username: "priya_singh",
-        email: "priya.singh@example.com",
-        password_hash: "$2b$12$e7Y1r6dSfVn3q8MjTxBc4z",
-        role: "Staff",
-        status: "Active"
-    },
-    {
         user_id: 1,
         username: "alice_wong",
         email: "alice.wong@example.com",
         password_hash: "$2b$12$d4N7q1iXlAs8t3RnVcHz6g",
         role: "Admin",
         status: "Active"
+    },
+    {
+        user_id: 3,
+        username: "priya_singh",
+        email: "priya.singh@example.com",
+        password_hash: "$2b$12$e7Y1r6dSfVn3q8MjTxBc4z",
+        role: "Staff",
+        status: "Active"
     }
 ];
+
+/**
+ * Returns the correct landing page for a signed-in user's role. Admins
+ * and Staff have their own management panels; Customers use the
+ * marketplace.
+ */
+function roleHomePage(role) {
+    if (role === "Admin") return "admin.html";
+    if (role === "Staff") return "staff.html";
+    return "index.html";
+}
 
 /* ==========================================================================
    API REQUEST HELPER
@@ -310,20 +321,8 @@ async function handleLogin(event) {
 
         // Authentication Success
         saveCurrentUser(user);
-
-        const destination =
-            user.role === "Admin"
-                ? "admin.html"
-                : user.role === "Staff"
-                    ? "staff.html"
-                    : "index.html";
-
-        const destinationLabel =
-            user.role === "Admin" || user.role === "Staff"
-                ? "management dashboard"
-                : "marketplace";
-
-        showMessage(`Welcome back, ${user.username}! Redirecting to ${destinationLabel}...`, "success");
+        const destination = roleHomePage(user.role);
+        showMessage(`Welcome back, ${user.username}! Redirecting...`, "success");
 
         setTimeout(() => {
             window.location.href = destination;
@@ -483,21 +482,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (sessionCard && sessionText) {
             sessionCard.style.display = "block";
             sessionText.innerHTML = `You are currently signed in as <strong>${escapeHTML(currentUser.username)}</strong> (Role: ${escapeHTML(currentUser.role)}).`;
-        }
 
-        const sessionContinueLink = document.getElementById("session-continue-link");
-        if (sessionContinueLink) {
-            const role = String(currentUser.role || "").toLowerCase();
-            sessionContinueLink.href =
-                role === "admin"
-                    ? "admin.html"
-                    : role === "staff"
-                        ? "staff.html"
-                        : "index.html";
-            sessionContinueLink.textContent =
-                role === "admin" || role === "staff"
-                    ? "Open Management Dashboard"
-                    : "Go to Marketplace";
+            // Point "Go to Marketplace" at the right page for this user's role
+            // (Admins/Staff don't use the customer marketplace)
+            const continueLink = sessionCard.querySelector(".btn-continue");
+            if (continueLink) {
+                continueLink.href = roleHomePage(currentUser.role);
+                continueLink.textContent = currentUser.role === "Customer" ? "Go to Marketplace" : "Go to Dashboard";
+            }
         }
 
         if (sessionLogoutBtn) {

@@ -152,12 +152,23 @@ function requireAuthenticatedCustomer() {
 
     if (currentUser.role !== "Customer") {
 
+        /* Admins and Staff are already authenticated - send them to
+           their own working management page instead of bouncing them
+           out to the login screen. */
+
+        const destination =
+            currentUser.role === "Admin" ?
+                "admin.html" :
+                currentUser.role === "Staff" ?
+                    "staff.html" :
+                    "login.html";
+
         alert(
-            "This page currently supports Customer accounts only."
+            `The marketplace page is for Customer accounts. Redirecting you to the ${currentUser.role} panel.`
         );
 
         window.location.href =
-            "login.html";
+            destination;
 
         return false;
 

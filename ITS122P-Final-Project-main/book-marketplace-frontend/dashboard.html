@@ -2,38 +2,37 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Librowse Dashboard</title>
+    <title>Redirecting... - Librowse Book Exchange</title>
 </head>
-<body style="font-family: Arial, sans-serif; background:#f4f6f9; padding:40px;">
-<main style="max-width:620px;margin:auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);">
-    <h1 id="welcomeTitle">Opening dashboard…</h1>
-    <p id="roleDisplay">Checking your account role…</p>
-</main>
-<script>
-(function () {
-    let user = null;
-    try {
-        user = JSON.parse(localStorage.getItem("librowseCurrentUser"));
-    } catch (_) {}
+<body style="font-family: Arial; background: #f4f6f9; padding: 40px;">
+    <div style="max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <p>Redirecting you to the right page...</p>
+    </div>
 
-    if (!user || !user.user_id) {
-        window.location.href = "login.html";
-        return;
-    }
+    <script>
+        /* This page previously used the wrong localStorage key ("user"
+           instead of "librowseCurrentUser") and compared role against
+           lowercase 'admin'/'staff' while the app stores 'Admin'/'Staff',
+           so it always denied access. It now just forwards to the
+           correct, working page for the signed-in user's role. */
 
-    const role = String(user.role || "").toLowerCase();
-    document.getElementById("welcomeTitle").textContent = `Welcome back, ${user.username}!`;
-    document.getElementById("roleDisplay").textContent = `Opening ${role || "user"} dashboard…`;
+        let currentUser = null;
+        try {
+            const stored = localStorage.getItem("librowseCurrentUser");
+            currentUser = stored ? JSON.parse(stored) : null;
+        } catch {
+            currentUser = null;
+        }
 
-    if (role === "admin") {
-        window.location.replace("admin.html");
-    } else if (role === "staff") {
-        window.location.replace("staff.html");
-    } else {
-        window.location.replace("index.html");
-    }
-})();
-</script>
+        if (!currentUser || !currentUser.user_id) {
+            window.location.href = "login.html";
+        } else if (currentUser.role === "Admin") {
+            window.location.href = "admin.html";
+        } else if (currentUser.role === "Staff") {
+            window.location.href = "staff.html";
+        } else {
+            window.location.href = "index.html";
+        }
+    </script>
 </body>
 </html>

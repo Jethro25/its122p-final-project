@@ -1,134 +1,217 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Librowse Staff Dashboard</title>
-    <link rel="stylesheet" href="management.css">
-</head>
-<body class="management-body" data-management-role="staff">
-<div class="management-shell">
-    <aside class="management-sidebar">
-        <div class="management-brand">
-            <h1>Librowse</h1>
-            <p>Book Exchange Management</p>
-            <span id="management-role-label" class="management-role">STAFF</span>
-        </div>
 
-        <nav class="management-nav" aria-label="Staff navigation">
-            <button data-tab="overview">Overview</button>
-            <button data-tab="users">Customer Status</button>
-            <button data-tab="reports">Forms & Reports</button>
-            <button data-tab="transactions">Transactions</button>
-            <button data-tab="refunds">Refund Requests</button>
-            <button data-tab="issues">Report Issue</button>
+    <link rel="stylesheet" href="style.css">
+
+    <title>Staff Panel - Librowse Book Exchange</title>
+</head>
+
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <h1>Librowse Staff Panel</h1>
+
+        <p>
+            Moderate customers, review forms, manage transactions, and process refund requests.
+        </p>
+
+        <nav>
+            <a href="#overview">Overview</a>
+            <a href="#customers">Customers</a>
+            <a href="#forms">Customer Forms</a>
+            <a href="#moderation">Moderation</a>
+            <a href="#transactions">Transactions</a>
+            <a href="#refunds">Refunds</a>
+            <a href="#report-issue">Report an Issue</a>
         </nav>
 
-        <div class="management-sidebar-bottom">
-            <a id="marketplace-link" href="index.html">← Marketplace</a>
-            <button id="management-logout" type="button">Log out</button>
-        </div>
-    </aside>
+        <div id="auth-status" class="auth-status"></div>
+    </header>
 
-    <main class="management-main">
-        <header class="management-header">
-            <div>
-                <h2>Staff Dashboard</h2>
-                <p>Moderate customer accounts, review forms, manage transactions, and process refunds.</p>
-            </div>
-            <div id="management-user-name" class="management-user-chip"></div>
-        </header>
 
-        <section class="management-section" data-section="overview">
-            <div id="overview-stats" class="management-grid cards-4"></div>
-            <div class="management-panel">
-                <h3>Staff responsibilities</h3>
-                <p class="helper">
-                    Staff actions are scoped to Customer records in this interface. Administrators retain control over
-                    role assignment, catalog/category management, system records, and the broader platform configuration.
-                </p>
+    <!-- MAIN CONTENT -->
+    <main>
+
+        <div id="page-message" class="auth-message" style="display: none;"></div>
+
+        <!-- OVERVIEW -->
+        <section id="overview">
+            <h2>Overview</h2>
+            <p>A quick snapshot of what needs your attention.</p>
+            <div id="stat-grid" class="stat-grid">
+                <p class="checkbox-group-empty">Loading stats...</p>
             </div>
         </section>
 
-        <section class="management-section" data-section="users">
-            <div class="management-panel">
-                <h3>Customer Status and Permissions</h3>
-                <p class="helper">View customer accounts and update their status or allowed permissions. Staff cannot change account roles.</p>
-                <div class="management-toolbar">
-                    <div class="management-field grow">
-                        <label for="users-search">Search customers</label>
-                        <input id="users-search" type="search" placeholder="Username, email, or status">
-                    </div>
-                    <button class="management-btn" type="button" onclick="loadAllUsers().then(renderUsersTable)">Refresh</button>
-                </div>
-                <div class="management-table-wrap">
-                    <table class="management-table">
-                        <thead><tr><th>ID</th><th>Customer</th><th>Role</th><th>Status</th><th>Permission JSON</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
-                        <tbody id="users-body"></tbody>
-                    </table>
-                </div>
-            </div>
+
+        <!-- CUSTOMERS -->
+        <section id="customers">
+            <h2>Manage Customer Statuses & Permissions</h2>
+            <p>
+                Suspend, ban, reinstate, or adjust the permissions of Customer accounts. Only Administrators
+                can change a user's role or remove an account.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Permissions (JSON)</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="customers-table-body">
+                    <tr><td colspan="6">Loading customers...</td></tr>
+                </tbody>
+            </table>
         </section>
 
-        <section class="management-section" data-section="reports">
-            <div class="management-panel">
-                <h3>Forms and Reports</h3>
-                <p class="helper">Review verification forms, seller applications, user violations, listing disputes, and customer feedback.</p>
-                <label style="font-size:13px;font-weight:700;">
-                    <input id="reports-forms-only" type="checkbox"> Show verification/seller forms only
-                </label>
-                <div class="management-table-wrap" style="margin-top:14px">
-                    <table class="management-table">
-                        <thead><tr><th>ID</th><th>Submitted By</th><th>Category</th><th>Related</th><th>Form Data</th><th>Submitted</th><th>Status</th><th>Resolution Notes</th><th>Actions</th></tr></thead>
-                        <tbody id="reports-body"></tbody>
-                    </table>
-                </div>
-            </div>
+
+        <!-- CUSTOMER FORMS -->
+        <section id="forms">
+            <h2>Approve or Reject Customer Forms</h2>
+            <p>
+                Verification forms and seller applications submitted by customers.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Submitted By</th>
+                        <th>Category</th>
+                        <th>Related To</th>
+                        <th>Details</th>
+                        <th>Status</th>
+                        <th>Resolution Notes</th>
+                        <th>Submitted</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="forms-table-body">
+                    <tr><td colspan="9">Loading forms...</td></tr>
+                </tbody>
+            </table>
         </section>
 
-        <section class="management-section" data-section="transactions">
-            <div class="management-panel">
-                <h3>Customer Transactions</h3>
-                <p class="helper">Update purchase and trade transaction statuses and record the Staff member managing the transaction.</p>
-                <div class="management-table-wrap">
-                    <table class="management-table">
-                        <thead><tr><th>ID</th><th>Buyer</th><th>Book</th><th>Type</th><th>Amount</th><th>Current Status</th><th>Staff</th><th>Created</th><th>New Status</th><th>Actions</th></tr></thead>
-                        <tbody id="transactions-body"></tbody>
-                    </table>
-                </div>
-            </div>
+
+        <!-- MODERATION -->
+        <section id="moderation">
+            <h2>Moderate Customer Activity</h2>
+            <p>
+                User violations, listing disputes, and general feedback reported by customers.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Submitted By</th>
+                        <th>Category</th>
+                        <th>Related To</th>
+                        <th>Details</th>
+                        <th>Status</th>
+                        <th>Resolution Notes</th>
+                        <th>Submitted</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="moderation-table-body">
+                    <tr><td colspan="9">Loading reports...</td></tr>
+                </tbody>
+            </table>
         </section>
 
-        <section class="management-section" data-section="refunds">
-            <div class="management-panel">
-                <h3>Refund Requests</h3>
-                <p class="helper">Review customer refund requests and approve or reject them.</p>
-                <div class="management-table-wrap">
-                    <table class="management-table">
-                        <thead><tr><th>ID</th><th>Transaction</th><th>Customer</th><th>Reason</th><th>Requested</th><th>Status</th><th>Processed By</th><th>Decision</th></tr></thead>
-                        <tbody id="refunds-body"></tbody>
-                    </table>
-                </div>
-            </div>
+
+        <!-- TRANSACTIONS -->
+        <section id="transactions">
+            <h2>Manage Customer Transactions</h2>
+            <p>
+                Update the status of purchase and trade transactions as they progress.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Buyer</th>
+                        <th>Requested Listing</th>
+                        <th>Offered Listing</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="staff-transactions-body">
+                    <tr><td colspan="8">Loading transactions...</td></tr>
+                </tbody>
+            </table>
         </section>
 
-        <section class="management-section" data-section="issues">
-            <div class="management-panel">
-                <h3>Report an Application Issue</h3>
-                <p class="helper">Send an internal issue/feedback report to Administration using the existing REPORTS table.</p>
-                <form id="staff-issue-form">
-                    <div class="management-field">
-                        <label for="staff-issue-details">Issue details</label>
-                        <textarea id="staff-issue-details" rows="8" placeholder="Describe the problem, steps to reproduce it, and any relevant transaction/user IDs." required></textarea>
-                    </div>
-                    <button class="management-btn primary" type="submit" style="margin-top:12px">Report to Administration</button>
-                </form>
-            </div>
+
+        <!-- REFUNDS -->
+        <section id="refunds">
+            <h2>Review Refund Requests</h2>
+            <p>
+                Approve or reject refund requests submitted by customers on eligible transactions.
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Transaction</th>
+                        <th>Customer</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                        <th>Requested</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="refunds-table-body">
+                    <tr><td colspan="7">Loading refund requests...</td></tr>
+                </tbody>
+            </table>
         </section>
+
+
+        <!-- REPORT AN ISSUE -->
+        <section id="report-issue">
+            <h2>Report an Issue to Administration</h2>
+            <p>
+                Flag an application problem, bug, or anything Administration should know about.
+            </p>
+
+            <form id="report-issue-form">
+                <label for="issue-details">Issue Details:</label>
+                <textarea id="issue-details" rows="5" required></textarea>
+
+                <button type="submit">Send to Administration</button>
+            </form>
+        </section>
+
     </main>
-</div>
 
-<div id="management-alert" class="management-alert" role="status"></div>
-<script src="management.js"></script>
+
+    <!-- FOOTER -->
+    <footer>
+        <p>Librowse Book Exchange</p>
+        <p>ITS122P Final Project — Staff Panel</p>
+    </footer>
+
+
+    <script>const PAGE_MODE = "Staff";</script>
+    <script src="manage.js"></script>
+
 </body>
+
 </html>

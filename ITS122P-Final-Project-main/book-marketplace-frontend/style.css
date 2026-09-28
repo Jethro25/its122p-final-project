@@ -1801,3 +1801,146 @@ footer p:first-child {
 .auth-switch-link a:hover {
     color: var(--purple);
 }
+
+/* ==========================================================================
+   ADMIN & STAFF MANAGEMENT PAGES
+   ========================================================================== */
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.stat-card {
+    background: var(--card);
+    border: 1px solid var(--border-card);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: var(--shadow-small);
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    background: var(--main-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.stat-label {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--text-gray);
+}
+
+.filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 0;
+}
+
+.filter-bar label {
+    margin: 0;
+}
+
+.filter-bar select {
+    width: auto;
+    min-width: 160px;
+}
+
+.table-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.small-btn {
+    padding: 6px 12px;
+    font-size: 13px;
+    border-radius: 8px;
+}
+
+.danger-btn {
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+}
+
+.mini-textarea {
+    width: 100%;
+    min-height: 40px;
+    font-size: 13px;
+    padding: 6px 8px;
+}
+
+.category-multiselect {
+    min-height: 90px;
+}
+
+.report-form-data {
+    max-width: 260px;
+    font-size: 13px;
+    color: var(--text-gray);
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--text-gray);
+    white-space: nowrap;
+}
+
+.badge-active,
+.badge-approved,
+.badge-completed,
+.badge-resolved {
+    background: #16a34a;
+}
+
+.badge-pending,
+.badge-pending-verification,
+.badge-under-review {
+    background: #d97706;
+}
+
+.badge-suspended,
+.badge-disputed,
+.badge-rejected,
+.badge-dismissed,
+.badge-cancelled,
+.badge-banned {
+    background: #dc2626;
+}
+
+.badge-accepted,
+.badge-audit-log {
+    background: var(--blue);
+}
+
+.badge-financial-transaction-record {
+    background: var(--purple);
+}
+
+#overview,
+#users,
+#customers,
+#categories,
+#books,
+#reports,
+#forms,
+#moderation,
+#records,
+#refunds,
+#report-issue {
+    position: relative;
+}
