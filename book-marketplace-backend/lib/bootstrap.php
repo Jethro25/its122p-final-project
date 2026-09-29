@@ -1,16 +1,19 @@
 <?php
 declare(strict_types=1);
 
-/**
- * Local-development CORS and preflight handling must run before the database
- * bootstrap. Otherwise a failed DB connection can prevent CORS headers from
- * reaching the browser and surface only as a generic NetworkError.
- */
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if ($origin !== '' && preg_match('#^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$#i', $origin)) {
+
+/* Allow localhost (dev) + any *.vercel.app domain (production) */
+if ($origin !== '' && (
+    preg_match('#^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$#i', $origin) ||
+    preg_match('#^https://[a-z0-9\-]+\.vercel\.app$#i', $origin)
+)) {
     header('Access-Control-Allow-Origin: ' . $origin);
     header('Vary: Origin');
+} else {
+    header('Access-Control-Allow-Origin: *');
 }
+
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, Cache-Control');
 header('Access-Control-Max-Age: 600');
