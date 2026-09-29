@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Refund &amp; Report - Librowse</title>
+    <script>window.LIBROWSE_API_BASE = "http://127.0.0.1:8000/api";</script>
+    <script src="session.js"></script>
+</head>
+<body>
+<header>
+    <h1>Librowse Book Exchange</h1>
+    <p>Buy, trade, and exchange books with other users.</p>
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="browse.html">Browse Books</a>
+        <a href="list-book.html">List a Book</a>
+        <a href="customer-dashboard.html">Dashboard</a>
+        <a href="support.html">Refund &amp; Report</a>
+        <a href="login.html">Login</a>
+        <a href="register.html">Register</a>
+    </nav>
+    <div id="auth-status" class="auth-status">
+        <a href="login.html">Sign in</a>
+        <a href="register.html">Create account</a>
+    </div>
+</header>
+<main>
+    <section id="refund">
+        <h2>Request a Refund</h2>
+        <p>Submit a refund request for an eligible transaction.</p>
+        <p class="required-note"><span class="required-star">*</span> Required fields</p>
+        <form id="refund-form" novalidate>
+            <!-- Customer ID hidden: filled automatically from session -->
+            <input type="hidden" id="customer-id" name="customer_id">
+
+            <label for="refund-transaction-id">Transaction ID <span class="required-star">*</span></label>
+            <input type="number" id="refund-transaction-id" name="transaction_id" required placeholder="Enter your Transaction ID">
+            <span class="field-error" id="err-refund-tx"></span>
+
+            <label for="refund-reason">Reason for Refund <span class="required-star">*</span></label>
+            <textarea id="refund-reason" name="reason" rows="5" required placeholder="Please describe the reason for your refund request…"></textarea>
+            <span class="field-error" id="err-refund-reason"></span>
+
+            <div class="form-button-row">
+                <button type="submit" id="refund-submit">Submit Refund Request</button>
+                <button type="button" id="refund-clear" class="btn-clear">Clear</button>
+            </div>
+        </form>
+    </section>
+
+    <section id="report">
+        <h2>Submit a Report</h2>
+        <p>Submit a report, form, or feedback to Staff and Administration.</p>
+        <p class="required-note"><span class="required-star">*</span> Required fields</p>
+        <form id="report-form" novalidate>
+            <!-- User ID hidden: filled automatically from session -->
+            <input type="hidden" id="submitted-by" name="submitted_by_id">
+
+            <label for="report-category">Report Category <span class="required-star">*</span></label>
+            <select id="report-category" name="report_category" required>
+                <option value="">Select Report Category</option>
+                <option value="Verification_Form">Verification Form</option>
+                <option value="Seller_Application">Seller Application</option>
+                <option value="User_Violation">User Violation</option>
+                <option value="Listing_Dispute">Listing Dispute</option>
+                <option value="General_Feedback">General Feedback</option>
+            </select>
+            <span class="field-error" id="err-report-category"></span>
+
+            <label for="related-entity">Related To <span class="required-star">*</span></label>
+            <select id="related-entity" name="related_entity_type" required>
+                <option value="">Select Type</option>
+                <option value="User">User</option>
+                <option value="Book_Listing">Book Listing</option>
+                <option value="Transaction">Transaction</option>
+                <option value="None">None</option>
+            </select>
+            <span class="field-error" id="err-related-entity"></span>
+
+            <label for="report-details">Report Details <span class="required-star">*</span></label>
+            <textarea id="report-details" name="form_data" rows="5" required placeholder="Please describe your report in detail…"></textarea>
+            <span class="field-error" id="err-report-details"></span>
+
+            <div class="form-button-row">
+                <button type="submit" id="report-submit">Submit Report</button>
+                <button type="button" id="report-clear" class="btn-clear">Clear</button>
+            </div>
+        </form>
+    </section>
+</main>
+<footer>
+    <p>Librowse Book Exchange</p>
+    <p>ITS122P Final Project</p>
+</footer>
+<script src="script.js"></script>
+<script>
+/* SUPPORT PAGE ENHANCEMENTS */
+(function () {
+    function showError(el, msg) {
+        if (!el) return;
+        el.textContent = msg; el.style.display = 'block';
+        var prev = el.previousElementSibling;
+        if (prev && ['INPUT','SELECT','TEXTAREA'].includes(prev.tagName)) prev.classList.add('field-invalid');
+    }
+    function clearError(el) {
+        if (!el) return;
+        el.textContent = ''; el.style.display = 'none';
+        var prev = el.previousElementSibling;
+        if (prev) prev.classList.remove('field-invalid');
+    }
+    function clearFormErrors(form) {
+        if (!form) return;
+        form.querySelectorAll('.field-error').forEach(function (el) { el.textContent = ''; el.style.display = 'none'; });
+        form.querySelectorAll('.field-invalid').forEach(function (el) { el.classList.remove('field-invalid'); });
+    }
+    function setProcessing(btn, isProcessing, defaultLabel) {
+        if (!btn) return;
+        if (isProcessing) { btn.disabled = true; btn.dataset.originalText = btn.textContent; btn.textContent = 'Processing…'; }
+        else { btn.disabled = false; btn.textContent = btn.dataset.originalText || defaultLabel || 'Submit'; }
+    }
+    function validateRequired(id, errorId, label) {
+        var el = document.getElementById(id);
+        var errEl = document.getElementById(errorId);
+        if (!el || !errEl) return true;
+        if (!el.value.trim()) { showError(errEl, label + ' is required.'); return false; }
+        clearError(errEl); return true;
+    }
+    function attachClear(fieldId, errorId) {
+        var el = document.getElementById(fieldId);
+        var errEl = document.getElementById(errorId);
+        if (!el || !errEl) return;
+        ['input','change'].forEach(function (evt) { el.addEventListener(evt, function () { clearError(errEl); }); });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var refundForm = document.getElementById('refund-form');
+        var refundSubmit = document.getElementById('refund-submit');
+        var refundClear = document.getElementById('refund-clear');
+        var reportForm = document.getElementById('report-form');
+        var reportSubmit = document.getElementById('report-submit');
+        var reportClear = document.getElementById('report-clear');
+
+        attachClear('refund-transaction-id','err-refund-tx');
+        attachClear('refund-reason','err-refund-reason');
+        attachClear('report-category','err-report-category');
+        attachClear('related-entity','err-related-entity');
+        attachClear('report-details','err-report-details');
+
+        function validateRefundForm() {
+            var ok = true;
+            var txEl = document.getElementById('refund-transaction-id');
+            var txErr = document.getElementById('err-refund-tx');
+            if (txEl) {
+                if (!txEl.value.trim()) { showError(txErr,'Transaction ID is required.'); ok = false; }
+                else if (isNaN(parseInt(txEl.value,10)) || parseInt(txEl.value,10) <= 0) { showError(txErr,'Please enter a valid Transaction ID.'); ok = false; }
+                else clearError(txErr);
+            }
+            if (!validateRequired('refund-reason','err-refund-reason','Reason for Refund')) ok = false;
+            return ok;
+        }
+
+        function validateReportForm() {
+            var ok = true;
+            if (!validateRequired('report-category','err-report-category','Report Category')) ok = false;
+            if (!validateRequired('related-entity','err-related-entity','Related To')) ok = false;
+            if (!validateRequired('report-details','err-report-details','Report Details')) ok = false;
+            return ok;
+        }
+
+        if (refundForm && refundSubmit) {
+            refundForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                if (!validateRefundForm()) return;
+                setProcessing(refundSubmit, true, 'Submit Refund Request');
+                Promise.resolve(submitRefund({ preventDefault: function(){} }))
+                    .then(function(){ setProcessing(refundSubmit,false,'Submit Refund Request'); })
+                    .catch(function(){ setProcessing(refundSubmit,false,'Submit Refund Request'); });
+            }, true);
+        }
+
+        if (refundClear && refundForm) {
+            refundClear.addEventListener('click', function () {
+                refundForm.reset(); clearFormErrors(refundForm);
+                var cid = document.getElementById('customer-id');
+                if (cid && window.currentUser) cid.value = window.currentUser.user_id;
+                if (refundSubmit) setProcessing(refundSubmit,false,'Submit Refund Request');
+            });
+        }
+
+        if (reportForm && reportSubmit) {
+            reportForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                if (!validateReportForm()) return;
+                setProcessing(reportSubmit, true, 'Submit Report');
+                Promise.resolve(submitReport({ preventDefault: function(){} }))
+                    .then(function(){ setProcessing(reportSubmit,false,'Submit Report'); })
+                    .catch(function(){ setProcessing(reportSubmit,false,'Submit Report'); });
+            }, true);
+        }
+
+        if (reportClear && reportForm) {
+            reportClear.addEventListener('click', function () {
+                reportForm.reset(); clearFormErrors(reportForm);
+                var sb = document.getElementById('submitted-by');
+                if (sb && window.currentUser) sb.value = window.currentUser.user_id;
+                if (reportSubmit) setProcessing(reportSubmit,false,'Submit Report');
+            });
+        }
+
+        document.addEventListener('keydown', function (e) {
+            if (!(e.ctrlKey || e.metaKey) || e.key !== 's') return;
+            e.preventDefault();
+            var active = document.activeElement;
+            if (reportForm && reportForm.contains(active) && reportSubmit) reportSubmit.click();
+            else if (refundSubmit) refundSubmit.click();
+        });
+    });
+})();
+</script>
+</body>
+</html>

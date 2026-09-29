@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>List a Book - Librowse</title>
+    <script>window.LIBROWSE_API_BASE = "http://127.0.0.1:8000/api";</script>
+    <script src="session.js"></script>
+</head>
+<body>
+<header>
+    <h1>Librowse Book Exchange</h1>
+    <p>Buy, trade, and exchange books with other users.</p>
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="browse.html">Browse Books</a>
+        <a href="list-book.html">List a Book</a>
+        <a href="customer-dashboard.html">Dashboard</a>
+        <a href="support.html">Refund &amp; Report</a>
+        <a href="login.html">Login</a>
+        <a href="register.html">Register</a>
+    </nav>
+    <div id="auth-status" class="auth-status">
+        <a href="login.html">Sign in</a>
+        <a href="register.html">Create account</a>
+    </div>
+</header>
+<main>
+    <section id="list-book">
+        <h2>List a Book</h2>
+        <p>Add one of your books to the marketplace.</p>
+        <p class="required-note"><span class="required-star">*</span> Required fields</p>
+
+        <form id="list-book-form" novalidate>
+
+            <label for="book-title">Book Title <span class="required-star">*</span></label>
+            <input type="text" id="book-title" name="title" required placeholder="Enter book title">
+            <span class="field-error" id="err-book-title"></span>
+
+            <label for="book-author">Book Author <span class="required-star">*</span></label>
+            <input type="text" id="book-author" name="author" required placeholder="Enter author name">
+            <span class="field-error" id="err-book-author"></span>
+
+            <label for="book-isbn">ISBN <span class="required-star">*</span></label>
+            <input type="text" id="book-isbn" name="isbn" required
+                placeholder="Enter 10 or 13 digit ISBN (numbers only)"
+                maxlength="13" inputmode="numeric" autocomplete="off">
+            <span class="field-hint">Enter exactly 10 or 13 digits. No letters, spaces, or hyphens.</span>
+            <span class="field-error" id="err-book-isbn"></span>
+
+            <fieldset id="book-category-group" class="checkbox-group">
+                <legend>Categories (select one or more) <span class="required-star">*</span></legend>
+                <div id="book-category-options">
+                    <p class="checkbox-group-empty">Loading categories...</p>
+                </div>
+            </fieldset>
+            <span class="field-error" id="err-book-category"></span>
+
+            <label for="listing-type">Listing Type <span class="required-star">*</span></label>
+            <select id="listing-type" name="listing_type" required>
+                <option value="">Select Listing Type</option>
+                <option value="For_sale">For Sale</option>
+                <option value="For_trade">For Trade</option>
+                <option value="Both">Both</option>
+            </select>
+            <span class="field-error" id="err-listing-type"></span>
+
+            <label for="price">Price <span class="price-currency-label">₱</span></label>
+            <div class="price-input-wrapper">
+                <span class="price-prefix">₱</span>
+                <input type="text" id="price" name="price"
+                    placeholder="e.g. 500" inputmode="numeric" maxlength="4" autocomplete="off">
+            </div>
+            <span class="field-hint">Numbers only, max ₱9999. Leave empty for trade-only listings.</span>
+            <span class="field-error" id="err-price"></span>
+
+            <label for="book-condition">Book Condition <span class="required-star">*</span></label>
+            <select id="book-condition" name="condition" required>
+                <option value="">Select Condition</option>
+                <option value="New">New</option>
+                <option value="Good">Good</option>
+                <option value="Acceptable">Acceptable</option>
+            </select>
+            <span class="field-error" id="err-book-condition"></span>
+
+            <div class="form-button-row">
+                <button type="submit" id="list-book-submit">List Book</button>
+                <button type="button" id="list-book-clear" class="btn-clear">Clear</button>
+            </div>
+        </form>
+
+        <div id="new-listing-result" style="display:none;">
+            <h3>Your Book Has Been Listed</h3>
+            <table class="detail-table">
+                <tbody id="new-listing-details"></tbody>
+            </table>
+        </div>
+    </section>
+</main>
+<footer>
+    <p>Librowse Book Exchange</p>
+    <p>ITS122P Final Project</p>
+</footer>
+<script src="script.js"></script>
+<script>
+/* LIST-BOOK FORM ENHANCEMENTS */
+(function () {
+    var isbnInput = document.getElementById('book-isbn');
+    if (isbnInput) {
+        isbnInput.addEventListener('keydown', function (e) {
+            var allowed = ['Backspace','Delete','Tab','Escape','ArrowLeft','ArrowRight','Home','End'];
+            if (allowed.includes(e.key)) return;
+            if (!/^\d$/.test(e.key)) e.preventDefault();
+        });
+        isbnInput.addEventListener('input', function () {
+            this.value = this.value.replace(/\D/g, '').slice(0, 13);
+        });
+        isbnInput.addEventListener('blur', function () { validateISBN(); });
+    }
+
+    function validateISBN() {
+        var val = isbnInput ? isbnInput.value.trim() : '';
+        var errEl = document.getElementById('err-book-isbn');
+        if (!errEl) return true;
+        if (val === '') { showError(errEl, 'ISBN is required.'); return false; }
+        if (!/^\d+$/.test(val)) { showError(errEl, 'ISBN must contain numbers only.'); return false; }
+        if (val.length !== 10 && val.length !== 13) {
+            showError(errEl, 'ISBN must be exactly 10 or 13 digits. You entered ' + val.length + '.');
+            return false;
+        }
+        clearError(errEl); return true;
+    }
+
+    var priceInput = document.getElementById('price');
+    if (priceInput) {
+        priceInput.addEventListener('keydown', function (e) {
+            var allowed = ['Backspace','Delete','Tab','Escape','ArrowLeft','ArrowRight','Home','End'];
+            if (allowed.includes(e.key)) return;
+            if (!/^\d$/.test(e.key)) e.preventDefault();
+        });
+        priceInput.addEventListener('input', function () {
+            this.value = this.value.replace(/\D/g, '').slice(0, 4);
+        });
+        priceInput.addEventListener('blur', function () { validatePrice(); });
+    }
+
+    function validatePrice() {
+        var val = priceInput ? priceInput.value.trim() : '';
+        var errEl = document.getElementById('err-price');
+        var listingType = document.getElementById('listing-type') ? document.getElementById('listing-type').value : '';
+        if (!errEl) return true;
+        if (val === '') {
+            if (listingType === 'For_sale' || listingType === 'Both') {
+                showError(errEl, 'Price is required for sale listings.'); return false;
+            }
+            clearError(errEl); return true;
+        }
+        if (!/^\d+$/.test(val)) { showError(errEl, 'Price must be numbers only. Do not type ₱ or letters.'); return false; }
+        var num = parseInt(val, 10);
+        if (num < 0) { showError(errEl, 'Price cannot be negative.'); return false; }
+        if (num > 9999) { showError(errEl, 'Maximum price is ₱9999.'); return false; }
+        clearError(errEl); return true;
+    }
+
+    function validateRequired(inputId, errorId, label) {
+        var input = document.getElementById(inputId);
+        var errEl = document.getElementById(errorId);
+        if (!input || !errEl) return true;
+        if (!input.value.trim()) { showError(errEl, label + ' is required.'); return false; }
+        clearError(errEl); return true;
+    }
+
+    ['book-title','book-author','listing-type','book-condition'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', function () { var e = document.getElementById('err-'+id); if (e) clearError(e); });
+            el.addEventListener('change', function () { var e = document.getElementById('err-'+id); if (e) clearError(e); });
+        }
+    });
+
+    function validateForm() {
+        var ok = true;
+        if (!validateRequired('book-title','err-book-title','Book Title')) ok = false;
+        if (!validateRequired('book-author','err-book-author','Book Author')) ok = false;
+        if (!validateISBN()) ok = false;
+        var catErr = document.getElementById('err-book-category');
+        var checked = document.querySelectorAll('#book-category-options input[name="category_ids"]:checked');
+        if (catErr) {
+            if (checked.length === 0) { showError(catErr, 'Please select at least one category.'); ok = false; }
+            else clearError(catErr);
+        }
+        if (!validateRequired('listing-type','err-listing-type','Listing Type')) ok = false;
+        if (!validatePrice()) ok = false;
+        if (!validateRequired('book-condition','err-book-condition','Book Condition')) ok = false;
+        return ok;
+    }
+
+    function showError(el, msg) {
+        el.textContent = msg; el.style.display = 'block';
+        if (el.previousElementSibling) el.previousElementSibling.classList.add('field-invalid');
+    }
+    function clearError(el) {
+        el.textContent = ''; el.style.display = 'none';
+        if (el.previousElementSibling) el.previousElementSibling.classList.remove('field-invalid');
+    }
+
+    function setProcessing(btn, isProcessing) {
+        if (isProcessing) {
+            btn.disabled = true;
+            btn.dataset.originalText = btn.textContent;
+            btn.textContent = 'Processing…';
+        } else {
+            btn.disabled = false;
+            btn.textContent = btn.dataset.originalText || 'List Book';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var form = document.getElementById('list-book-form');
+        var submitBtn = document.getElementById('list-book-submit');
+        var clearBtn = document.getElementById('list-book-clear');
+
+        if (form && submitBtn) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                if (!validateForm()) return;
+                setProcessing(submitBtn, true);
+                var fakeEvent = { preventDefault: function () {} };
+                Promise.resolve(submitBookListing(fakeEvent))
+                    .then(function () { setProcessing(submitBtn, false); })
+                    .catch(function () { setProcessing(submitBtn, false); });
+            }, true);
+        }
+
+        if (clearBtn && form) {
+            clearBtn.addEventListener('click', function () {
+                form.reset();
+                form.querySelectorAll('.field-error').forEach(function (el) { el.textContent = ''; el.style.display = 'none'; });
+                form.querySelectorAll('.field-invalid').forEach(function (el) { el.classList.remove('field-invalid'); });
+                var result = document.getElementById('new-listing-result');
+                if (result) result.style.display = 'none';
+                if (submitBtn) setProcessing(submitBtn, false);
+            });
+        }
+
+        document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                if (!document.getElementById('list-book-form')) return;
+                e.preventDefault();
+                if (submitBtn) submitBtn.click();
+            }
+        });
+    });
+})();
+</script>
+</body>
+</html>

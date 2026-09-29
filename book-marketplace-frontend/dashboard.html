@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Librowse Dashboard</title>
+    <script>window.LIBROWSE_API_BASE = "http://127.0.0.1:8000/api";</script>
+    <script src="session.js"></script>
+</head>
+<body style="font-family:Arial,sans-serif;background:#f4f6f9;padding:40px;">
+<main style="max-width:620px;margin:auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+    <h1 id="welcomeTitle">Opening dashboard…</h1>
+    <p id="roleDisplay">Checking your account role…</p>
+</main>
+<script>
+(async function () {
+    const user = window.librowseAuth ? await window.librowseAuth.validateSession(true) : null;
+    if (!user) return;
+    document.getElementById('welcomeTitle').textContent = `Welcome back, ${user.username}!`;
+    document.getElementById('roleDisplay').textContent = `Opening ${String(user.role || '').toLowerCase()} dashboard…`;
+    const role = String(user.role || '').toLowerCase();
+    window.location.replace(role === 'admin' ? 'admin.html' : role === 'staff' ? 'staff.html' : 'customer-dashboard.html');
+})();
+</script>
+</body>
+</html>

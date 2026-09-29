@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Dashboard - Librowse</title>
+    <script>window.LIBROWSE_API_BASE = "http://127.0.0.1:8000/api";</script>
+    <script src="session.js"></script>
+</head>
+<body>
+<header>
+    <h1>Librowse Book Exchange</h1>
+    <p>Buy, trade, and exchange books with other users.</p>
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="browse.html">Browse Books</a>
+        <a href="list-book.html">List a Book</a>
+        <a href="customer-dashboard.html">Dashboard</a>
+        <a href="support.html">Refund &amp; Report</a>
+        <a href="login.html">Login</a>
+        <a href="register.html">Register</a>
+    </nav>
+    <div id="auth-status" class="auth-status">
+        <a href="login.html">Sign in</a>
+        <a href="register.html">Create account</a>
+    </div>
+</header>
+<main>
+    <section id="dashboard-welcome">
+        <h2 id="dashboard-title">My Dashboard</h2>
+        <p id="dashboard-subtitle">Welcome back! Here is a summary of your activity.</p>
+    </section>
+
+    <section id="dashboard-listings">
+        <h2>My Listings</h2>
+        <p>Summary of books you have listed on the marketplace.</p>
+        <div class="dashboard-cards">
+            <div class="dashboard-card">
+                <div class="dashboard-card-label">Total Listings</div>
+                <div class="dashboard-card-value" id="stat-total">—</div>
+            </div>
+            <div class="dashboard-card dashboard-card-green">
+                <div class="dashboard-card-label">Active</div>
+                <div class="dashboard-card-value" id="stat-active">—</div>
+            </div>
+            <div class="dashboard-card dashboard-card-blue">
+                <div class="dashboard-card-label">Sold / Traded</div>
+                <div class="dashboard-card-value" id="stat-sold">—</div>
+            </div>
+            <div class="dashboard-card dashboard-card-yellow">
+                <div class="dashboard-card-label">Pending</div>
+                <div class="dashboard-card-value" id="stat-pending-listing">—</div>
+            </div>
+        </div>
+        <p class="dashboard-note" id="listing-note" style="display:none;"></p>
+        <table id="dashboard-listing-table" style="display:none;">
+            <thead>
+                <tr><th>Inventory ID</th><th>Book</th><th>Type</th><th>Price</th><th>Condition</th><th>Status</th></tr>
+            </thead>
+            <tbody id="dashboard-listing-body">
+                <tr><td colspan="6">Loading your listings…</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section id="dashboard-transactions">
+        <h2>My Transactions</h2>
+        <p>Summary of your book purchases and trades. <a href="transactions.html">View all transactions →</a></p>
+        <div class="dashboard-cards">
+            <div class="dashboard-card">
+                <div class="dashboard-card-label">Total</div>
+                <div class="dashboard-card-value" id="stat-tx-total">—</div>
+            </div>
+            <div class="dashboard-card dashboard-card-yellow">
+                <div class="dashboard-card-label">Pending</div>
+                <div class="dashboard-card-value" id="stat-tx-pending">—</div>
+            </div>
+            <div class="dashboard-card dashboard-card-green">
+                <div class="dashboard-card-label">Completed</div>
+                <div class="dashboard-card-value" id="stat-tx-completed">—</div>
+            </div>
+            <div class="dashboard-card dashboard-card-red">
+                <div class="dashboard-card-label">Cancelled</div>
+                <div class="dashboard-card-value" id="stat-tx-cancelled">—</div>
+            </div>
+        </div>
+    </section>
+
+    <section id="dashboard-refunds">
+        <h2>Refund Requests</h2>
+        <p>Summary of refund requests you have submitted. <a href="support.html">Submit a refund →</a></p>
+        <div class="dashboard-cards">
+            <div class="dashboard-card dashboard-card-yellow">
+                <div class="dashboard-card-label">Pending</div>
+                <div class="dashboard-card-value" id="stat-refund-pending">—</div>
+            </div>
+            <div class="dashboard-card dashboard-card-green">
+                <div class="dashboard-card-label">Approved</div>
+                <div class="dashboard-card-value" id="stat-refund-approved">—</div>
+            </div>
+            <div class="dashboard-card dashboard-card-red">
+                <div class="dashboard-card-label">Rejected</div>
+                <div class="dashboard-card-value" id="stat-refund-other">—</div>
+            </div>
+        </div>
+        <p class="dashboard-note">Refund statistics are loaded from the API when the backend is running.</p>
+    </section>
+
+    <section id="dashboard-reports">
+        <h2>My Reports</h2>
+        <p>Summary of reports you have submitted. <a href="support.html">Submit a report →</a></p>
+        <div class="dashboard-cards">
+            <div class="dashboard-card dashboard-card-yellow">
+                <div class="dashboard-card-label">Pending</div>
+                <div class="dashboard-card-value" id="stat-report-pending">—</div>
+            </div>
+            <div class="dashboard-card dashboard-card-blue">
+                <div class="dashboard-card-label">Under Review</div>
+                <div class="dashboard-card-value" id="stat-report-review">—</div>
+            </div>
+            <div class="dashboard-card dashboard-card-green">
+                <div class="dashboard-card-label">Resolved</div>
+                <div class="dashboard-card-value" id="stat-report-resolved">—</div>
+            </div>
+        </div>
+        <p class="dashboard-note">Report statistics are loaded from the API when the backend is running.</p>
+    </section>
+</main>
+<footer>
+    <p>Librowse Book Exchange</p>
+    <p>ITS122P Final Project</p>
+</footer>
+<script src="script.js"></script>
+<script src="customer-dashboard.js"></script>
+</body>
+</html>

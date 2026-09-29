@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<security>
+    <sessions>
+        <session token_hash="702c7af9d5ff8cd01a9a6ea253d7abe537491475a7cb3f73671453284579adfa" user_id="5" role="Customer" created_at="2026-09-29T02:41:38+00:00" expires_at="2026-09-29T10:41:38+00:00"/>
+        <session token_hash="d1a53b9fc9fca6c191e5fa245e7c7043b90669cadba0a88e6848cbc19a727e3e" user_id="3" role="Staff" created_at="2026-09-29T02:53:28+00:00" expires_at="2026-09-29T10:53:28+00:00"/>
+        <session token_hash="81e5261fdda68e472aeeb746949633f1874a7bda109e8c61641f6fb8d657acc5" user_id="1" role="Admin" created_at="2026-09-29T02:54:01+00:00" expires_at="2026-09-29T10:54:01+00:00"/>
+        <session token_hash="315cb61e59dd029fc955ab11031428c62f0644bbca2a9ec51ecae0c68028a143" user_id="3" role="Staff" created_at="2026-09-29T02:54:37+00:00" expires_at="2026-09-29T10:54:37+00:00"/>
+        <session token_hash="2dd71efd3cb16c5a92897651d627c6c31c2e042b6ad6b37cf2b190f6353f28ac" user_id="3" role="Staff" created_at="2026-09-29T03:08:23+00:00" expires_at="2026-09-29T11:08:23+00:00"/>
+        <session token_hash="ec35da7c1f74ac125606882b4aa25da1725f3ce1053159afda52be6ebeed5ea5" user_id="6" role="Customer" created_at="2026-09-29T03:08:33+00:00" expires_at="2026-09-29T11:08:33+00:00"/>
+    </sessions>
+</security>
