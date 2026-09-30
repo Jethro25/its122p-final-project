@@ -221,14 +221,13 @@
         var clearBtn = document.getElementById('list-book-clear');
 
         if (form && submitBtn) {
+            /* Validation gate only. The POST is performed by script.js
+               (submitBookListing), so this handler must not submit anything. */
             form.addEventListener('submit', function (e) {
-                e.preventDefault();
-                if (!validateForm()) return;
-                setProcessing(submitBtn, true);
-                var fakeEvent = { preventDefault: function () {} };
-                Promise.resolve(submitBookListing(fakeEvent))
-                    .then(function () { setProcessing(submitBtn, false); })
-                    .catch(function () { setProcessing(submitBtn, false); });
+                if (!validateForm()) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation(); /* keep script.js from submitting invalid data */
+                }
             }, true);
         }
 

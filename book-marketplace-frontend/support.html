@@ -169,13 +169,12 @@
         }
 
         if (refundForm && refundSubmit) {
+            /* Validation gate only. The POST is performed by script.js (submitRefund). */
             refundForm.addEventListener('submit', function (e) {
-                e.preventDefault();
-                if (!validateRefundForm()) return;
-                setProcessing(refundSubmit, true, 'Submit Refund Request');
-                Promise.resolve(submitRefund({ preventDefault: function(){} }))
-                    .then(function(){ setProcessing(refundSubmit,false,'Submit Refund Request'); })
-                    .catch(function(){ setProcessing(refundSubmit,false,'Submit Refund Request'); });
+                if (!validateRefundForm()) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                }
             }, true);
         }
 
@@ -189,13 +188,12 @@
         }
 
         if (reportForm && reportSubmit) {
+            /* Validation gate only. The POST is performed by script.js (submitReport). */
             reportForm.addEventListener('submit', function (e) {
-                e.preventDefault();
-                if (!validateReportForm()) return;
-                setProcessing(reportSubmit, true, 'Submit Report');
-                Promise.resolve(submitReport({ preventDefault: function(){} }))
-                    .then(function(){ setProcessing(reportSubmit,false,'Submit Report'); })
-                    .catch(function(){ setProcessing(reportSubmit,false,'Submit Report'); });
+                if (!validateReportForm()) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                }
             }, true);
         }
 
