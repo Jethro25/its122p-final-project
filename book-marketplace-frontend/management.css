@@ -4,30 +4,30 @@
    ========================================================================= */
 
 :root {
-    --ink: #1b2a3a;
-    --ink-2: #24374b;
-    --paper: #f4f5f1;
-    --surface: #ffffff;
-    --rule: #dadfd6;
-    --rule-strong: #c4cbc1;
-    --muted: #5b6672;
-    --spine: #2e5b4f;
-    --spine-dark: #22463c;
-    --spine-tint: #e7efeb;
-    --tab: #e5b53f;
-    --stamp: #a8322d;
-    --stamp-tint: #fbeceb;
-    --ok: #2e7d4f;
-    --ok-tint: #e6f3ea;
-    --warn: #a86a12;
-    --warn-tint: #fbf1de;
-    --info: #2f5e8c;
-    --info-tint: #e7eef6;
+    --ink: #4e3b30;
+    --ink-2: #6b5040;
+    --paper: #f4eadd;
+    --surface: #fffaf3;
+    --rule: #eadbc8;
+    --rule-strong: #d9c3a8;
+    --muted: #8a715f;
+    --spine: #9a7458;
+    --spine-dark: #7c5b44;
+    --spine-tint: #f3e6d6;
+    --tab: #e2b66c;
+    --stamp: #b4655a;
+    --stamp-tint: #f8e6e1;
+    --ok: #6e8b5e;
+    --ok-tint: #e8efe1;
+    --warn: #a97a2c;
+    --warn-tint: #f8edd6;
+    --info: #6c7f95;
+    --info-tint: #e7ecf1;
 
-    --font-head: "Literata", Georgia, serif;
-    --font-ui: "Public Sans", "Segoe UI", system-ui, sans-serif;
-    --r-lg: 14px;
-    --r-md: 8px;
+    --font-head: "Fraunces", Georgia, serif;
+    --font-ui: "Nunito Sans", "Segoe UI", system-ui, sans-serif;
+    --r-lg: 20px;
+    --r-md: 12px;
 }
 
 * { box-sizing: border-box; }
@@ -256,7 +256,7 @@ body.management-body {
 .management-table textarea:focus {
     outline: none;
     border-color: var(--spine);
-    box-shadow: 0 0 0 3px rgba(46,91,79,.18);
+    box-shadow: 0 0 0 3px rgba(154,116,88,.22);
 }
 .management-table input,
 .management-table select { padding: 6px 8px; font-size: 13px; min-width: 110px; }
@@ -314,8 +314,8 @@ body.management-body {
 .management-btn.primary { color: #fff; background: var(--spine); border-color: var(--spine); }
 .management-btn.primary:hover { background: var(--spine-dark); border-color: var(--spine-dark); }
 .management-btn.success { color: #fff; background: var(--ok); border-color: var(--ok); }
-.management-btn.warning { color: var(--warn); background: var(--warn-tint); border-color: #e8cf9c; }
-.management-btn.danger  { color: var(--stamp); background: var(--surface); border-color: #e0aaa6; }
+.management-btn.warning { color: var(--warn); background: var(--warn-tint); border-color: #ead3a6; }
+.management-btn.danger  { color: var(--stamp); background: var(--surface); border-color: #e5bdb6; }
 .management-btn.danger:hover { background: var(--stamp-tint); border-color: var(--stamp); }
 .management-btn.small { padding: 5px 10px; font-size: 12px; }
 
@@ -345,7 +345,7 @@ body.management-body {
     border-bottom: 1px solid var(--rule);
 }
 .management-table tr:last-child td { border-bottom: none; }
-.management-table tbody tr:hover td { background: #f8faf7; }
+.management-table tbody tr:hover td { background: #fbf3e8; }
 .management-table .muted { color: var(--muted); font-size: 12px; }
 
 /* ---------------- Badges ---------------- */
@@ -375,7 +375,7 @@ body.management-body {
     color: #fff;
     background: var(--ink);
     border-radius: var(--r-md);
-    box-shadow: 0 10px 30px rgba(27,42,58,.25);
+    box-shadow: 0 10px 30px rgba(78,59,48,.25);
     display: none;
 }
 .management-alert.success { background: var(--ok); }
@@ -427,3 +427,57 @@ body.management-body {
 @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
 }
+
+
+/* =========================================================================
+   COZY THEME — management
+   ========================================================================= */
+body.management-body {
+    background:
+        radial-gradient(900px 400px at 100% -10%, #efe0cc 0%, transparent 60%),
+        var(--paper);
+}
+.management-sidebar {
+    background: linear-gradient(180deg, #ead8c1 0%, #e0c7aa 100%);
+    color: var(--ink);
+    border-right: 1px solid var(--rule-strong);
+}
+.management-brand { border-bottom-color: var(--rule-strong); }
+.management-brand h1 { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.management-brand h1::before {
+    content: "";
+    width: 34px; height: 34px;
+    background: url("assets/logo.svg") center / contain no-repeat;
+}
+.management-brand p { color: var(--ink-2); }
+.management-role { background: var(--surface); color: var(--spine-dark); border: 1px solid var(--rule-strong); }
+.management-nav button { color: var(--ink-2); font-weight: 600; }
+.management-nav button:hover { background: rgba(255,250,243,.55); color: var(--ink); }
+.management-nav button.active { background: var(--surface); color: var(--ink); box-shadow: 0 4px 14px -8px rgba(110,80,55,.45); }
+.management-nav button.active::before { background: var(--spine); }
+.management-sidebar-bottom { border-top-color: var(--rule-strong); }
+.management-sidebar-bottom a { color: var(--ink-2); }
+.management-sidebar-bottom a:hover { background: rgba(255,250,243,.55); color: var(--ink); }
+.management-sidebar-bottom button { color: var(--ink); border-color: var(--rule-strong); background: rgba(255,250,243,.5); border-radius: 999px; }
+.management-sidebar-bottom button:hover { background: var(--surface); }
+
+.management-header h2 { font-weight: 600; }
+.management-card { border-top: none; border-left: 4px solid var(--spine); background: #fffdf9; }
+.management-grid .management-card:nth-child(2) { border-left-color: #8fa383; }
+.management-grid .management-card:nth-child(3) { border-left-color: var(--tab); }
+.management-grid .management-card:nth-child(4) { border-left-color: var(--stamp); }
+.management-stat-value { font-weight: 600; }
+.management-panel { box-shadow: 0 10px 30px -18px rgba(110,80,55,.35); }
+.management-btn { border-radius: 999px; }
+.management-table th { background: #f6ecdf; }
+.management-field input, .management-field select, .management-field textarea { background: #fffdf9; }
+.management-sidebar-bottom::before {
+    content: "";
+    display: block;
+    height: 120px;
+    margin: 0 auto 6px;
+    width: 100%;
+    background: url("assets/books-stack.svg") center bottom / contain no-repeat;
+    opacity: .9;
+}
+@media (max-width: 800px) { .management-sidebar-bottom::before { display: none; } }
