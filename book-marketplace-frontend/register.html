@@ -4,6 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,600;7..72,700&family=Public+Sans:wght@400;500;600;700&display=swap">
 
     <link rel="stylesheet" href="style.css">
 
@@ -61,25 +64,19 @@
 
             <form id="register-form" class="auth-form">
                 <div class="form-group">
-                    <label for="register-username">
-                        Username:
-                    </label>
+                    <label for="register-username">Username</label>
                     <input type="text" id="register-username" required minlength="3" maxlength="50" pattern="^[a-zA-Z0-9_]+$" placeholder="e.g. bookworm_99" autocomplete="username">
                     <span class="input-helper-text">3-50 characters. Letters, numbers, and underscores only.</span>
                 </div>
 
                 <div class="form-group">
-                    <label for="register-email">
-                        Email Address:
-                    </label>
+                    <label for="register-email">Email Address</label>
                     <input type="email" id="register-email" required placeholder="e.g. you@example.com" autocomplete="email">
                     <span class="input-helper-text">Used for exchange updates and notifications.</span>
                 </div>
 
                 <div class="form-group">
-                    <label for="register-password">
-                        Password:
-                    </label>
+                    <label for="register-password">Password</label>
                     <div class="password-input-wrapper">
                         <input type="password" id="register-password" required minlength="6" placeholder="Choose a secure password" autocomplete="new-password">
                         <button type="button" class="toggle-password-btn" data-target="register-password" aria-label="Toggle password visibility" title="Toggle password visibility">
@@ -92,9 +89,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="register-confirm-password">
-                        Confirm Password:
-                    </label>
+                    <label for="register-confirm-password">Confirm Password</label>
                     <div class="password-input-wrapper">
                         <input type="password" id="register-confirm-password" required minlength="6" placeholder="Re-enter your password" autocomplete="new-password">
                         <button type="button" class="toggle-password-btn" data-target="register-confirm-password" aria-label="Toggle password visibility" title="Toggle password visibility">

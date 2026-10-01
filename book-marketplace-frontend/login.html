@@ -4,6 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,600;7..72,700&family=Public+Sans:wght@400;500;600;700&display=swap">
 
     <link rel="stylesheet" href="style.css">
 
@@ -61,16 +64,12 @@
 
             <form id="login-form" class="auth-form">
                 <div class="form-group">
-                    <label for="login-identifier">
-                        Email Address or Username:
-                    </label>
-                    <input type="text" id="login-identifier" required placeholder="e.g. emma.clarke@example.com or emma_clarke" autocomplete="username">
+                    <label for="login-identifier">Email Address or Username</label>
+                    <input type="text" id="login-identifier" required placeholder="emma_clarke or you@example.com" autocomplete="username">
                 </div>
 
                 <div class="form-group">
-                    <label for="login-password">
-                        Password:
-                    </label>
+                    <label for="login-password">Password</label>
                     <div class="password-input-wrapper">
                         <input type="password" id="login-password" required placeholder="Enter your password" autocomplete="current-password">
                         <button type="button" class="toggle-password-btn" data-target="login-password" aria-label="Toggle password visibility" title="Toggle password visibility">
