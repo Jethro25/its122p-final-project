@@ -2,8 +2,10 @@
 /**
  * Database connection (PDO / MySQL).
  * LOCAL: uses defaults (root, no password, 127.0.0.1)
- * VERCEL + TiDB: set DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS in Vercel env vars
- * TiDB Cloud requires TLS — we use MYSQL_ATTR_SSL_MODE instead of a cert file
+ * VERCEL + TiDB Cloud: set DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS
+ *
+ * TiDB Cloud requires TLS. We force it via the DSN ssl-mode parameter
+ * instead of PDO constants so no deprecated warnings are emitted.
  */
 function get_env_or(string $key, string $default): string {
     $value = getenv($key);
@@ -16,8 +18,17 @@ $dbName = get_env_or('DB_NAME', 'book_marketplace');
 $dbUser = get_env_or('DB_USER', 'root');
 $dbPass = get_env_or('DB_PASS', '');
 
+$isTiDB = ($dbHost !== '127.0.0.1' && $dbHost !== 'localhost');
+
+/*
+ * For TiDB Cloud we append ssl-mode=REQUIRED to the DSN.
+ * This tells the MySQL driver to use TLS without needing a cert file
+ * and without touching any PDO::MYSQL_ATTR_* constants.
+ */
 $dsn = "mysql:host={$dbHost};port={$dbPort};dbname={$dbName};charset=utf8mb4";
-$pdo = null;
+if ($isTiDB) {
+    $dsn .= ';ssl-mode=REQUIRED';
+}
 
 $pdoOptions = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -26,31 +37,7 @@ $pdoOptions = [
     PDO::ATTR_TIMEOUT            => 10,
 ];
 
-/*
- * TiDB Cloud (and any remote host that is NOT localhost) requires TLS.
- * We enable SSL without a cert file — TiDB's public endpoint is signed
- * by a trusted CA that PHP's OpenSSL already knows, so no .pem needed.
- * On localhost the SSL constants may not exist, so we guard with defined().
- */
-$isTiDB = ($dbHost !== '127.0.0.1' && $dbHost !== 'localhost');
-
-if ($isTiDB) {
-    /* Try the modern PDO SSL mode constant first (PHP 8.1+) */
-    if (defined('PDO::MYSQL_ATTR_SSL_MODE')) {
-        // 2 = SSL_MODE_REQUIRED without verifying the CA cert file
-        $pdoOptions[PDO::MYSQL_ATTR_SSL_MODE] = 2;
-    }
-    /* Always set VERIFY_SERVER_CERT to false — TiDB's cert is valid but
-       the hostname in the cert can differ from the gateway hostname */
-    if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
-        $pdoOptions[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
-    }
-    /* Fall back to the Aiven/PlanetScale pem approach only if the file exists */
-    $sslCert = __DIR__ . '/isrgrootx1.pem';
-    if (file_exists($sslCert) && defined('PDO::MYSQL_ATTR_SSL_CA')) {
-        $pdoOptions[PDO::MYSQL_ATTR_SSL_CA] = $sslCert;
-    }
-}
+$pdo = null;
 
 try {
     $pdo = new PDO($dsn, $dbUser, $dbPass, $pdoOptions);
