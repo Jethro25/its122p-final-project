@@ -2,7 +2,8 @@
 /**
  * Database connection (PDO / MySQL).
  * LOCAL: uses defaults (root, no password, 127.0.0.1)
- * VERCEL: set DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS in Vercel environment variables
+ * VERCEL + TiDB: set DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS in Vercel env vars
+ * TiDB Cloud requires TLS — we use MYSQL_ATTR_SSL_MODE instead of a cert file
  */
 function get_env_or(string $key, string $default): string {
     $value = getenv($key);
@@ -22,14 +23,33 @@ $pdoOptions = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     PDO::ATTR_EMULATE_PREPARES   => false,
-    PDO::ATTR_TIMEOUT            => 5,
+    PDO::ATTR_TIMEOUT            => 10,
 ];
 
-/* Add SSL cert if available (needed for Aiven/PlanetScale) */
-$sslCert = __DIR__ . '/isrgrootx1.pem';
-if (file_exists($sslCert)) {
-    $pdoOptions[PDO::MYSQL_ATTR_SSL_CA] = $sslCert;
-    $pdoOptions[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+/*
+ * TiDB Cloud (and any remote host that is NOT localhost) requires TLS.
+ * We enable SSL without a cert file — TiDB's public endpoint is signed
+ * by a trusted CA that PHP's OpenSSL already knows, so no .pem needed.
+ * On localhost the SSL constants may not exist, so we guard with defined().
+ */
+$isTiDB = ($dbHost !== '127.0.0.1' && $dbHost !== 'localhost');
+
+if ($isTiDB) {
+    /* Try the modern PDO SSL mode constant first (PHP 8.1+) */
+    if (defined('PDO::MYSQL_ATTR_SSL_MODE')) {
+        // 2 = SSL_MODE_REQUIRED without verifying the CA cert file
+        $pdoOptions[PDO::MYSQL_ATTR_SSL_MODE] = 2;
+    }
+    /* Always set VERIFY_SERVER_CERT to false — TiDB's cert is valid but
+       the hostname in the cert can differ from the gateway hostname */
+    if (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
+        $pdoOptions[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+    }
+    /* Fall back to the Aiven/PlanetScale pem approach only if the file exists */
+    $sslCert = __DIR__ . '/isrgrootx1.pem';
+    if (file_exists($sslCert) && defined('PDO::MYSQL_ATTR_SSL_CA')) {
+        $pdoOptions[PDO::MYSQL_ATTR_SSL_CA] = $sslCert;
+    }
 }
 
 try {
