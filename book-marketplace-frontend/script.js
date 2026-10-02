@@ -1046,6 +1046,15 @@ async function submitBookListing(event) {
 
         };
 
+        /* Attach the cover photo chosen on the form (if any) */
+
+        if (window.librowsePendingCover) {
+
+            listingData.cover_image =
+                window.librowsePendingCover;
+
+        }
+
         /* Include price only if entered */
 
         if (price !== "") {

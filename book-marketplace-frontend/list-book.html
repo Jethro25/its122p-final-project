@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&family=Courier+Prime:wght@400;700&display=swap">
     <link rel="stylesheet" href="style.css">
     <title>List a Book - Librowse</title>
     <script src="session.js"></script>
@@ -85,6 +85,21 @@
             </select>
             <span class="field-error" id="err-book-condition"></span>
 
+            <label for="cover-photo">Cover photo <span class="optional-tag">optional</span></label>
+            <div class="photo-picker" id="photo-picker">
+                <div class="photo-preview" id="photo-dropzone" title="Drop a photo here">
+                    <img id="cover-preview" alt="Preview of how your book will look on the shelf">
+                    <span class="photo-preview-tag" id="cover-preview-tag">Placeholder cover</span>
+                </div>
+                <div class="photo-actions">
+                    <p>Add a photo of your actual copy so readers can see its condition. If you skip this, we&rsquo;ll bind it in a library-style cover with your title on it.</p>
+                    <label class="photo-btn" for="cover-photo">Choose a photo</label>
+                    <input type="file" id="cover-photo" accept="image/*" class="visually-hidden">
+                    <button type="button" id="cover-remove" class="btn-clear small-btn" hidden>Remove photo</button>
+                    <span id="cover-status" class="field-hint" role="status">JPG, PNG or WebP. You can also drag a photo onto the preview.</span>
+                </div>
+            </div>
+
             <div class="form-button-row">
                 <button type="submit" id="list-book-submit">List Book</button>
                 <button type="button" id="list-book-clear" class="btn-clear">Clear</button>
@@ -104,6 +119,8 @@
     <p>ITS122P Final Project</p>
 </footer>
 <script src="script.js"></script>
+<script src="book-covers.js"></script>
+<script src="list-book-photo.js"></script>
 <script>
 /* LIST-BOOK FORM ENHANCEMENTS */
 (function () {

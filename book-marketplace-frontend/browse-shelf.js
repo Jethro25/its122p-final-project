@@ -1,0 +1,296 @@
+/* =========================================================================
+   LIBROWSE — interactive bookshelf (browse.html)
+   Loaded after script.js. It wraps script.js's renderBooks() so every search
+   or filter redraws both the shelf view and the original catalog table.
+   Buying and trading still go through script.js (buyBook / tradeBook).
+   ========================================================================= */
+(function () {
+    if (!document.getElementById("bookshelf")) return;
+
+    const shelf = document.getElementById("bookshelf");
+    const listWrap = document.getElementById("catalog-list");
+    const countEl = document.getElementById("shelf-count");
+    const sortEl = document.getElementById("shelf-sort");
+    const mineEl = document.getElementById("filter-mine");
+    const dialog = document.getElementById("book-dialog");
+    let lastRendered = [];
+
+    function esc(s) {
+        return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+    function me() { return typeof currentUser !== "undefined" ? currentUser : null; }
+    function isMine(listing) { return me() && Number(listing.seller_id) === Number(me().user_id); }
+    function bookOf(listing) { return (typeof bookMap !== "undefined" && bookMap[listing.book_id]) || null; }
+    function categoryText(book) {
+        try { return book ? formatCategoryNames(book) : "Uncategorized"; } catch (_) { return "Uncategorized"; }
+    }
+    function sellerName(listing) {
+        const u = typeof userMap !== "undefined" ? userMap[listing.seller_id] : null;
+        return u ? u.username : `User #${listing.seller_id}`;
+    }
+    function callNumber(listing, book) {
+        const cat = categoryText(book).replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "GEN";
+        const author = (book && book.author ? book.author.split(" ").pop() : "X").slice(0, 3).toUpperCase();
+        return `${cat} ${String(listing.inventory_id).padStart(4, "0")} ${author}`;
+    }
+    function statusInfo(listing) {
+        const s = listing.status || "Available";
+        if (s === "Available") return { label: "Available", out: false };
+        if (s === "In_transaction") return { label: "On hold", out: true };
+        if (s === "Sold") return { label: "Sold", out: true };
+        if (s === "Traded") return { label: "Traded", out: true };
+        return { label: s.replace("_", " "), out: true };
+    }
+    function shortPrice(listing) {
+        if (listing.price === null || listing.price === "" || listing.price === undefined) return "Trade only";
+        return "₱" + Number(listing.price).toLocaleString("en-PH", { maximumFractionDigits: 0 });
+    }
+    function typeRibbon(type) {
+        return type === "For_sale" ? "For sale" : type === "For_trade" ? "For trade" : "Sale or trade";
+    }
+
+    /* ---------- sort + "only mine" (applied to both views) ---------- */
+    function arrange(listings) {
+        let list = listings.slice();
+        if (mineEl && mineEl.checked) list = list.filter(isMine);
+        const by = sortEl ? sortEl.value : "newest";
+        const title = l => (bookOf(l)?.title || "").toLowerCase();
+        const price = l => (l.price === null || l.price === "" || l.price === undefined) ? Infinity : Number(l.price);
+        if (by === "title") list.sort((a, b) => title(a).localeCompare(title(b)));
+        if (by === "price-asc") list.sort((a, b) => price(a) - price(b));
+        if (by === "price-desc") list.sort((a, b) => (price(b) === Infinity ? -1 : price(b)) - (price(a) === Infinity ? -1 : price(a)));
+        if (by === "newest") list.sort((a, b) => String(b.listed_at || b.inventory_id).localeCompare(String(a.listed_at || a.inventory_id)) || b.inventory_id - a.inventory_id);
+        if (by === "available") list.sort((a, b) => statusInfo(a).out - statusInfo(b).out);
+        return list;
+    }
+
+    /* ---------- shelf rendering ---------- */
+    function renderShelf(listings) {
+        lastRendered = listings;
+        const total = typeof bookListings !== "undefined" ? bookListings.length : listings.length;
+        if (countEl) {
+            countEl.textContent = listings.length === total
+                ? `${total} book${total === 1 ? "" : "s"} on the shelves`
+                : `Showing ${listings.length} of ${total} books`;
+        }
+
+        if (!listings.length) {
+            shelf.innerHTML = `
+                <div class="shelf-empty">
+                    <img src="assets/books-stack.svg" alt="" width="160" height="135">
+                    <h3>No books on this shelf</h3>
+                    <p>Try a different search, or clear the filters to see every book.</p>
+                    <button type="button" id="shelf-clear-filters">Clear filters</button>
+                </div>`;
+            document.getElementById("shelf-clear-filters")?.addEventListener("click", clearFilters);
+            return;
+        }
+
+        shelf.innerHTML = listings.map((listing, i) => {
+            const book = bookOf(listing);
+            const st = statusInfo(listing);
+            const tilt = ((listing.inventory_id * 37) % 5 - 2) * 0.6;
+            return `
+                <button type="button" class="shelf-book${st.out ? " is-out" : ""}${isMine(listing) ? " is-mine" : ""}"
+                        data-id="${listing.inventory_id}" style="--tilt:${tilt}deg; --i:${i}"
+                        aria-label="${esc(book?.title || "Unknown book")} by ${esc(book?.author || "unknown author")}, ${esc(shortPrice(listing))}, ${esc(st.label)}">
+                    <span class="book-cover">
+                        <img src="${esc(librowseCoverFor(listing, book, categoryText(book)))}" alt="" loading="lazy">
+                        <span class="book-ribbon ribbon-${listing.listing_type}">${typeRibbon(listing.listing_type)}</span>
+                        ${st.out ? `<span class="book-stamp">${esc(st.label)}</span>` : ""}
+                        ${isMine(listing) ? `<span class="book-mine">Yours</span>` : ""}
+                    </span>
+                    <span class="book-label">
+                        <span class="book-title">${esc(book?.title || "Unknown book")}</span>
+                        <span class="book-author">${esc(book?.author || "Unknown author")}</span>
+                        <span class="book-price">${esc(shortPrice(listing))}</span>
+                    </span>
+                </button>`;
+        }).join("");
+    }
+
+    function clearFilters() {
+        ["search-book"].forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+        ["filter-type", "filter-condition"].forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+        document.querySelectorAll("#filter-category-options input[type=checkbox]").forEach(cb => { cb.checked = false; });
+        if (mineEl) mineEl.checked = false;
+        filterBooks();
+    }
+
+    /* Wrap script.js renderBooks so both views stay in sync */
+    const originalRender = window.renderBooks || renderBooks;
+    window.renderBooks = function (listings) {
+        const arranged = arrange(listings || []);
+        originalRender(arranged);
+        renderShelf(arranged);
+    };
+    // Function declarations in script.js resolve through the global object,
+    // so reassigning the global makes script.js call the wrapped version.
+    try { renderBooks = window.renderBooks; } catch (_) {}
+
+    sortEl?.addEventListener("change", () => filterBooks());
+    mineEl?.addEventListener("change", () => filterBooks());
+
+    /* ---------- view toggle ---------- */
+    document.querySelectorAll(".view-toggle button").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const view = btn.dataset.view;
+            document.querySelectorAll(".view-toggle button").forEach(b => {
+                b.classList.toggle("active", b === btn);
+                b.setAttribute("aria-pressed", String(b === btn));
+            });
+            shelf.hidden = view !== "shelf";
+            listWrap.hidden = view !== "list";
+        });
+    });
+
+    /* ---------- detail "catalog card" ---------- */
+    shelf.addEventListener("click", e => {
+        const card = e.target.closest(".shelf-book");
+        if (!card) return;
+        const listing = (typeof inventoryMap !== "undefined" && inventoryMap[card.dataset.id])
+            || lastRendered.find(l => String(l.inventory_id) === card.dataset.id);
+        if (listing) openDetail(listing);
+    });
+
+    function openDetail(listing) {
+        const book = bookOf(listing);
+        const st = statusInfo(listing);
+        const mine = isMine(listing);
+        const canBuy = !st.out && !mine && (listing.listing_type === "For_sale" || listing.listing_type === "Both");
+        const canTrade = !st.out && !mine && (listing.listing_type === "For_trade" || listing.listing_type === "Both");
+        const listed = listing.listed_at ? new Date(String(listing.listed_at).replace(" ", "T")).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) : "—";
+
+        dialog.innerHTML = `
+            <div class="book-dialog-inner">
+                <button type="button" class="dialog-close" aria-label="Close">&times;</button>
+                <div class="dialog-cover">
+                    <img id="dialog-cover-img" src="${esc(librowseCoverFor(listing, book, categoryText(book)))}" alt="Cover of ${esc(book?.title || "this book")}">
+                    ${mine ? `
+                    <div class="owner-photo">
+                        <p>${listing.cover_image ? "Your photo is showing." : "Showing a library-style placeholder."} Add a real photo of your copy so others can see its condition.</p>
+                        <label class="photo-btn" for="dialog-photo-input">${listing.cover_image ? "Change photo" : "Add a photo"}</label>
+                        <input type="file" id="dialog-photo-input" accept="image/*" class="visually-hidden">
+                        ${listing.cover_image ? `<button type="button" class="btn-clear small-btn" id="dialog-photo-remove">Remove photo</button>` : ""}
+                        <span class="owner-photo-status" id="dialog-photo-status" role="status"></span>
+                    </div>` : ""}
+                </div>
+                <div class="catalog-card">
+                    <div class="catalog-card-head">
+                        <span class="call-no">${esc(callNumber(listing, book))}</span>
+                        <span class="status-stamp ${st.out ? "out" : "in"}">${esc(st.label)}</span>
+                    </div>
+                    <h3 id="book-dialog-title">${esc(book?.title || "Unknown book")}</h3>
+                    <p class="by">by ${esc(book?.author || "Unknown author")}</p>
+                    <dl class="catalog-fields">
+                        <div><dt>Category</dt><dd>${esc(categoryText(book))}</dd></div>
+                        <div><dt>Condition</dt><dd>${esc(listing.condition || "—")}</dd></div>
+                        <div><dt>Listing</dt><dd>${esc(formatListingType(listing.listing_type))}</dd></div>
+                        <div><dt>ISBN</dt><dd>${esc(book?.isbn || "—")}</dd></div>
+                        <div><dt>Seller</dt><dd>${esc(sellerName(listing))}${mine ? " (you)" : ""}</dd></div>
+                        <div><dt>Shelved</dt><dd>${esc(listed)}</dd></div>
+                    </dl>
+                    <div class="catalog-price">${esc(formatPrice(listing.price))}</div>
+                    <div class="dialog-actions">
+                        ${canBuy ? `<button type="button" id="dialog-buy">Buy this book</button>` : ""}
+                        ${canTrade ? `<button type="button" id="dialog-trade" class="btn-clear">Offer a trade</button>` : ""}
+                        ${mine ? `<p class="dialog-note">This is your listing. Others can buy or trade for it from the shelves.</p>` : ""}
+                        ${st.out && !mine ? `<p class="dialog-note">This book is currently ${esc(st.label.toLowerCase())}, so it can't be requested right now.</p>` : ""}
+                    </div>
+                    <div class="trade-picker" id="trade-picker" hidden></div>
+                </div>
+            </div>`;
+        dialog.setAttribute("aria-labelledby", "book-dialog-title");
+
+        dialog.querySelector(".dialog-close").addEventListener("click", () => dialog.close());
+        dialog.querySelector("#dialog-buy")?.addEventListener("click", async () => {
+            dialog.close();
+            await buyBook(listing);
+            await refreshShelf();
+        });
+        dialog.querySelector("#dialog-trade")?.addEventListener("click", () => showTradePicker(listing));
+        if (mine) wireOwnerPhoto(listing, book);
+
+        if (typeof dialog.showModal === "function") dialog.showModal(); else dialog.setAttribute("open", "");
+    }
+
+    dialog.addEventListener("click", e => { if (e.target === dialog) dialog.close(); });
+
+    function showTradePicker(listing) {
+        const picker = dialog.querySelector("#trade-picker");
+        const mineAvailable = (typeof bookListings !== "undefined" ? bookListings : [])
+            .filter(l => isMine(l) && (l.status || "Available") === "Available");
+        picker.hidden = false;
+        if (!mineAvailable.length) {
+            picker.innerHTML = `<p class="dialog-note">To trade, you need one of your own books listed and available.
+                <a href="list-book.html">List a book first</a>.</p>`;
+            return;
+        }
+        picker.innerHTML = `
+            <p class="trade-question">Which of your books will you offer?</p>
+            <div class="trade-options" role="radiogroup" aria-label="Your books">
+                ${mineAvailable.map((l, i) => {
+                    const b = bookOf(l);
+                    return `<label class="trade-option">
+                        <input type="radio" name="trade-offer" value="${l.inventory_id}" ${i === 0 ? "checked" : ""}>
+                        <img src="${esc(librowseCoverFor(l, b, categoryText(b)))}" alt="">
+                        <span><strong>${esc(b?.title || "Book #" + l.inventory_id)}</strong><small>${esc(l.condition || "")}</small></span>
+                    </label>`;
+                }).join("")}
+            </div>
+            <button type="button" id="trade-send">Send trade request</button>`;
+        picker.querySelector("#trade-send").addEventListener("click", async () => {
+            const chosen = picker.querySelector('input[name="trade-offer"]:checked');
+            if (!chosen) return;
+            dialog.close();
+            // tradeBook() in script.js asks for the offered Inventory ID with prompt();
+            // answer it with the book picked here.
+            const originalPrompt = window.prompt;
+            window.prompt = () => chosen.value;
+            try { await tradeBook(listing); }
+            finally { window.prompt = originalPrompt; }
+            await refreshShelf();
+        });
+    }
+
+    function wireOwnerPhoto(listing, book) {
+        const input = dialog.querySelector("#dialog-photo-input");
+        const status = dialog.querySelector("#dialog-photo-status");
+        const img = dialog.querySelector("#dialog-cover-img");
+
+        async function save(value, doneText) {
+            await apiRequest(`user_books.php?id=${listing.inventory_id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ cover_image: value })
+            });
+            listing.cover_image = value;
+            img.src = librowseCoverFor(listing, book, categoryText(book));
+            status.textContent = doneText;
+            filterBooks();
+        }
+
+        input?.addEventListener("change", async () => {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            status.textContent = "Preparing photo…";
+            try {
+                const data = await librowseCompressImage(file);
+                img.src = data;
+                status.textContent = "Saving…";
+                await save(data, "Photo saved. It now shows on the shelves.");
+            } catch (err) {
+                status.textContent = err.message || "Could not save the photo.";
+            }
+        });
+        dialog.querySelector("#dialog-photo-remove")?.addEventListener("click", async () => {
+            status.textContent = "Removing…";
+            try { await save(null, "Photo removed. Showing the placeholder cover."); }
+            catch (err) { status.textContent = err.message || "Could not remove the photo."; }
+        });
+    }
+
+    async function refreshShelf() {
+        try { await loadBooks(); filterBooks(); } catch (_) {}
+    }
+})();

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&family=Courier+Prime:wght@400;700&display=swap">
     <link rel="stylesheet" href="style.css">
     <title>Browse Books - Librowse</title>
     <script src="session.js"></script>
@@ -31,11 +31,9 @@
         <section id="browse">
 
             <img class="section-icon" src="assets/icon-search.svg" alt="" width="52" height="52">
-        <h2>Browse Books</h2>
+        <h2>The Stacks</h2>
 
-            <p>
-                Search and view books currently listed by other users.
-            </p>
+            <p>Wander the shelves, pull out a book to see its catalog card, then buy it or offer a trade.</p>
 
 
             <!-- Search -->
@@ -108,13 +106,41 @@
 
 
                 <button type="submit">
-                    Search
+                    Search the catalog
                 </button>
 
             </form>
 
 
-            <!-- Books table (populated by JavaScript) -->
+
+            <!-- Shelf toolbar -->
+            <div class="shelf-toolbar">
+                <p id="shelf-count" class="shelf-count" role="status">Opening the stacks&hellip;</p>
+                <div class="shelf-controls">
+                    <label class="mine-toggle"><input type="checkbox" id="filter-mine"> Only my listings</label>
+                    <label class="sort-label" for="shelf-sort">Sort</label>
+                    <select id="shelf-sort">
+                        <option value="newest">Newest on the shelf</option>
+                        <option value="available">Available first</option>
+                        <option value="title">Title A&ndash;Z</option>
+                        <option value="price-asc">Price: low to high</option>
+                        <option value="price-desc">Price: high to low</option>
+                    </select>
+                    <div class="view-toggle" role="group" aria-label="View">
+                        <button type="button" data-view="shelf" class="active" aria-pressed="true">Shelf</button>
+                        <button type="button" data-view="list" aria-pressed="false">Catalog list</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shelf view (populated by browse-shelf.js) -->
+            <div id="bookshelf" class="bookshelf" aria-live="polite">
+                <span class="shelf-skeleton"></span><span class="shelf-skeleton"></span><span class="shelf-skeleton"></span>
+                <span class="shelf-skeleton"></span><span class="shelf-skeleton"></span><span class="shelf-skeleton"></span>
+            </div>
+
+            <!-- Catalog list view: the original table -->
+            <div id="catalog-list" class="catalog-list" hidden>
             <table>
 
                 <thead>
@@ -149,6 +175,9 @@
                 </tbody>
 
             </table>
+            </div>
+
+            <dialog id="book-dialog" class="book-dialog"></dialog>
 
         </section>
 </main>
@@ -157,5 +186,7 @@
     <p>ITS122P Final Project</p>
 </footer>
 <script src="script.js"></script>
+<script src="book-covers.js"></script>
+<script src="browse-shelf.js"></script>
 </body>
 </html>
