@@ -1484,3 +1484,56 @@ button.btn-danger-solid:hover { background: #9a4f45; }
     padding: 6px 14px; font-size: 13px; color: var(--ink); background: var(--tab);
 }
 .shelf-toast button:hover { background: #f0c75c; }
+
+/* ---------- Manage my listings (multi-select) ---------- */
+.manage-btn {
+    padding: 8px 16px; font-size: 14px;
+    color: var(--ink); background: var(--surface); border-color: var(--rule-strong);
+}
+.manage-btn:hover { background: var(--paper); border-color: var(--spine); }
+.manage-btn.active { color: #fffaf3; background: var(--ink); border-color: var(--ink); }
+
+.bookshelf.select-mode .shelf-book.is-locked { cursor: not-allowed; opacity: .45; }
+.bookshelf.select-mode .shelf-book.is-locked .book-cover { transform: none; }
+.bookshelf.select-mode .shelf-book.is-pickable:hover .book-cover { transform: translateY(-6px); }
+.pick-check {
+    position: absolute; z-index: 2; top: 8px; right: 8px;
+    width: 28px; height: 28px;
+    background: rgba(255,250,243,.92); border: 2px solid var(--ink); border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0,0,0,.35);
+}
+.shelf-book.is-picked .pick-check {
+    background: var(--tab) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='%234e3b30' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 18px no-repeat;
+}
+.shelf-book.is-picked .book-cover {
+    transform: translateY(-8px);
+    box-shadow: 0 0 0 4px var(--tab), 8px 14px 22px rgba(0,0,0,.55);
+}
+.shelf-book.is-picked .book-label { background: #fff3d6; border-color: var(--tab); }
+
+.bulk-bar {
+    position: sticky; bottom: 16px; z-index: 40;
+    margin-top: 16px; padding: 10px 12px 10px 18px;
+    color: #fffaf3; background: var(--ink);
+    border-radius: 999px; box-shadow: 0 16px 34px -14px rgba(43,30,22,.7);
+    animation: bar-in .25s ease;
+}
+@keyframes bar-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.bulk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bulk-count { font-weight: 700; margin-right: 6px; }
+.bulk-spacer { flex: 1; }
+.bulk-link {
+    padding: 6px 10px; font-size: 13px; color: #f3e6d6;
+    background: transparent; text-decoration: underline;
+}
+.bulk-link:hover { background: rgba(255,255,255,.08); color: #fff; }
+.bulk-bar button:not(.bulk-link) { padding: 8px 16px; font-size: 14px; }
+.bulk-bar .btn-clear { color: #fffaf3; border-color: rgba(255,255,255,.35); background: transparent; }
+.bulk-bar .btn-clear:hover { background: rgba(255,255,255,.08); }
+.bulk-bar #bulk-restore { background: #6e8b5e; }
+.bulk-bar button:disabled { background: rgba(255,255,255,.14) !important; color: rgba(255,250,243,.55); }
+.bulk-confirm span:first-child { font-size: 14px; max-width: 60ch; }
+@media (max-width: 600px) {
+    .bulk-bar { border-radius: 18px; bottom: 8px; }
+    .bulk-spacer { flex-basis: 100%; height: 0; }
+}

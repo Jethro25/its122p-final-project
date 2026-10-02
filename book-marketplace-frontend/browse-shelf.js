@@ -15,6 +15,8 @@
     const dialog = document.getElementById("book-dialog");
     let lastRendered = [];
     let typeFilter = "all";          // all | sale | trade
+    let selectMode = false;          // "Manage my listings" mode
+    const selected = new Set();      // inventory_ids picked in that mode
     const typeSelect = document.getElementById("filter-type");
 
     /* Sold, traded and on-hold books are taken off the shelves automatically.
@@ -106,11 +108,15 @@
             const book = bookOf(listing);
             const st = statusInfo(listing);
             const tilt = ((listing.inventory_id * 37) % 5 - 2) * 0.6;
+            const pickable = selectMode && isPickable(listing);
+            const picked = pickable && selected.has(listing.inventory_id);
             return `
-                <button type="button" class="shelf-book${st.out ? " is-out" : ""}${isMine(listing) ? " is-mine" : ""}"
+                <button type="button" class="shelf-book${st.out ? " is-out" : ""}${isMine(listing) ? " is-mine" : ""}${selectMode ? (pickable ? " is-pickable" : " is-locked") : ""}${picked ? " is-picked" : ""}"
                         data-id="${listing.inventory_id}" style="--tilt:${tilt}deg; --i:${i}"
-                        aria-label="${esc(book?.title || "Unknown book")} by ${esc(book?.author || "unknown author")}, ${esc(shortPrice(listing))}, ${esc(st.label)}">
+                        ${selectMode ? `aria-pressed="${picked}" ${pickable ? "" : 'aria-disabled="true"'}` : ""}
+                        aria-label="${selectMode ? (pickable ? "Select " : "Can't select ") : ""}${esc(book?.title || "Unknown book")} by ${esc(book?.author || "unknown author")}, ${esc(shortPrice(listing))}, ${esc(st.label)}">
                     <span class="book-cover">
+                        ${selectMode && pickable ? `<span class="pick-check" aria-hidden="true"></span>` : ""}
                         <img src="${esc(librowseCoverFor(listing, book, categoryText(book)))}" alt="" loading="lazy">
                         <span class="book-ribbon ribbon-${listing.listing_type}">${typeRibbon(listing.listing_type)}</span>
                         ${st.out ? `<span class="book-stamp">${esc(st.label)}</span>` : ""}
@@ -130,6 +136,7 @@
         ["filter-type", "filter-condition"].forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
         document.querySelectorAll("#filter-category-options input[type=checkbox]").forEach(cb => { cb.checked = false; });
         if (mineEl) mineEl.checked = false;
+        if (selectMode) setSelectMode(false, false);
         setTypeFilter("all", false);
         filterBooks();
     }
@@ -140,6 +147,7 @@
         const arranged = arrange(listings || []);
         originalRender(arranged);
         renderShelf(arranged);
+        if (selectMode) updateBar();
     };
     // Function declarations in script.js resolve through the global object,
     // so reassigning the global makes script.js call the wrapped version.
@@ -161,7 +169,10 @@
     typeSelect?.addEventListener("change", () => { if (typeSelect.value) setTypeFilter("all", false); });
 
     sortEl?.addEventListener("change", () => filterBooks());
-    mineEl?.addEventListener("change", () => filterBooks());
+    mineEl?.addEventListener("change", () => {
+        if (!mineEl.checked && selectMode) setSelectMode(false, false);
+        filterBooks();
+    });
 
     /* ---------- view toggle ---------- */
     document.querySelectorAll(".view-toggle button").forEach(btn => {
@@ -180,6 +191,7 @@
     shelf.addEventListener("click", e => {
         const card = e.target.closest(".shelf-book");
         if (!card) return;
+        if (selectMode) { togglePick(Number(card.dataset.id), card); return; }
         const listing = (typeof inventoryMap !== "undefined" && inventoryMap[card.dataset.id])
             || lastRendered.find(l => String(l.inventory_id) === card.dataset.id);
         if (listing) openDetail(listing);
@@ -414,6 +426,127 @@
         clearTimeout(toastTimer);
         toastTimer = setTimeout(() => el.classList.remove("show"), 7000);
     }
+
+    /* ---------- "Manage my listings": select several, act once ---------- */
+    const bar = document.getElementById("bulk-bar");
+    const manageBtn = document.getElementById("manage-btn");
+    const els = id => document.getElementById(id);
+
+    function isPickable(l) {
+        return isMine(l) && (l.status === "Available" || l.status === "Removed" || !l.status);
+    }
+    function pickedListings() {
+        return [...selected].map(id => inventoryMap[id]).filter(Boolean);
+    }
+    function updateBar() {
+        const picked = pickedListings();
+        const toRemove = picked.filter(l => (l.status || "Available") === "Available");
+        const toRestore = picked.filter(l => l.status === "Removed");
+        els("bulk-count").textContent = picked.length
+            ? `${picked.length} selected`
+            : "Tap your books to select them";
+        els("bulk-remove").disabled = !toRemove.length;
+        els("bulk-remove").textContent = toRemove.length ? `Remove ${toRemove.length}` : "Remove";
+        els("bulk-restore").disabled = !toRestore.length;
+        els("bulk-restore").textContent = toRestore.length ? `Put back ${toRestore.length}` : "Put back";
+        els("bulk-restore").hidden = !lastRendered.some(l => l.status === "Removed" && isMine(l));
+    }
+    function togglePick(id, card) {
+        const listing = inventoryMap[id];
+        if (!listing || !isPickable(listing)) return;
+        if (selected.has(id)) selected.delete(id); else selected.add(id);
+        const on = selected.has(id);
+        card.classList.toggle("is-picked", on);
+        card.setAttribute("aria-pressed", String(on));
+        updateBar();
+    }
+    function setSelectMode(on, rerender = true) {
+        selectMode = on;
+        selected.clear();
+        bar.hidden = !on;
+        manageBtn.classList.toggle("active", on);
+        manageBtn.setAttribute("aria-pressed", String(on));
+        manageBtn.textContent = on ? "Done managing" : "Manage my listings";
+        shelf.classList.toggle("select-mode", on);
+        hideConfirm();
+        if (on && mineEl && !mineEl.checked) mineEl.checked = true;   // only your books can be picked
+        if (rerender) filterBooks();
+        updateBar();
+    }
+    function showConfirm(text) {
+        els("bulk-row").hidden = true;
+        els("bulk-confirm").hidden = false;
+        els("bulk-confirm-text").textContent = text;
+        els("bulk-confirm-no").focus();
+    }
+    function hideConfirm() {
+        els("bulk-row").hidden = false;
+        els("bulk-confirm").hidden = true;
+    }
+
+    async function bulkSetStatus(ids, status) {
+        const result = await apiRequest("user_books.php?action=bulk_status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids, status })
+        });
+        const changed = (result && result.updated_ids) || [];
+        changed.forEach(id => { if (inventoryMap[id]) inventoryMap[id].status = status; });
+        return { changed, skipped: (result && result.skipped_ids) || [] };
+    }
+
+    manageBtn?.addEventListener("click", () => setSelectMode(!selectMode));
+    els("bulk-done")?.addEventListener("click", () => setSelectMode(false));
+    els("bulk-none")?.addEventListener("click", () => { selected.clear(); filterBooks(); updateBar(); });
+    els("bulk-all")?.addEventListener("click", () => {
+        lastRendered.filter(isPickable).forEach(l => selected.add(l.inventory_id));
+        filterBooks(); updateBar();
+    });
+    els("bulk-remove")?.addEventListener("click", () => {
+        const n = pickedListings().filter(l => (l.status || "Available") === "Available").length;
+        showConfirm(`Take ${n} book${n === 1 ? "" : "s"} off the shelves? Other readers won't see ${n === 1 ? "it" : "them"} anymore. You can put ${n === 1 ? "it" : "them"} back later.`);
+        els("bulk-confirm-yes").textContent = `Yes, remove ${n}`;
+    });
+    els("bulk-confirm-no")?.addEventListener("click", hideConfirm);
+
+    async function runBulk(status, button) {
+        const ids = pickedListings()
+            .filter(l => status === "Removed" ? (l.status || "Available") === "Available" : l.status === "Removed")
+            .map(l => l.inventory_id);
+        if (!ids.length || button.disabled) return;
+        const label = button.textContent;
+        button.disabled = true;
+        button.textContent = status === "Removed" ? "Removing…" : "Putting back…";
+        try {
+            const { changed, skipped } = await bulkSetStatus(ids, status);
+            selected.clear();
+            hideConfirm();
+            filterBooks();
+            updateBar();
+            const n = changed.length;
+            const note = skipped.length ? ` ${skipped.length} couldn't be changed (they may have a pending request).` : "";
+            if (status === "Removed") {
+                toast(`${n} book${n === 1 ? "" : "s"} taken off the shelves.${note}`, n ? "Undo" : null, async () => {
+                    await bulkSetStatus(changed, "Available");
+                    filterBooks(); updateBar();
+                    toast(`${n} book${n === 1 ? "" : "s"} back on the shelves.`);
+                });
+            } else {
+                toast(`${n} book${n === 1 ? "" : "s"} back on the shelves.${note}`);
+            }
+        } catch (err) {
+            toast(err.message || "Nothing was changed. Please try again.");
+        } finally {
+            button.disabled = false;
+            button.textContent = label;
+            updateBar();
+        }
+    }
+    els("bulk-confirm-yes")?.addEventListener("click", e => runBulk("Removed", e.currentTarget));
+    els("bulk-restore")?.addEventListener("click", e => runBulk("Available", e.currentTarget));
+    document.addEventListener("keydown", e => {
+        if (e.key === "Escape" && selectMode && !dialog.open) setSelectMode(false);
+    });
 
     async function refreshShelf() {
         try { await loadBooks(); filterBooks(); } catch (_) {}

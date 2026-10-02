@@ -9,6 +9,15 @@
  */
 require_once __DIR__ . '/../lib/bootstrap.php';
 
+/* Make sure USER_BOOKS.status accepts 'Removed' (older databases lack it) */
+function ensure_removed_status(PDO $pdo): void
+{
+    $col = $pdo->query("SHOW COLUMNS FROM `USER_BOOKS` LIKE 'status'")->fetch();
+    if ($col && strpos((string) $col['Type'], "'Removed'") === false) {
+        $pdo->exec("ALTER TABLE `USER_BOOKS` MODIFY `status` ENUM('Available','In_transaction','Sold','Traded','Removed','Reserved','Delisted') NOT NULL DEFAULT 'Available'");
+    }
+}
+
 /* One-time migration: add the cover_image column if this database lacks it */
 try {
     $pdo->query('SELECT `cover_image` FROM `USER_BOOKS` LIMIT 0');
@@ -62,10 +71,62 @@ if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
 
     /* Older databases may be missing 'Removed' in the status list — add it */
     if (($method === 'PUT' || $method === 'PATCH') && array_key_exists('status', $payload)) {
-        $col = $pdo->query("SHOW COLUMNS FROM `USER_BOOKS` LIKE 'status'")->fetch();
-        if ($col && strpos((string) $col['Type'], "'Removed'") === false) {
-            $pdo->exec("ALTER TABLE `USER_BOOKS` MODIFY `status` ENUM('Available','In_transaction','Sold','Traded','Removed','Reserved','Delisted') NOT NULL DEFAULT 'Available'");
+        ensure_removed_status($pdo);
+    }
+
+    /* ── BULK: remove or put back several of your listings in one request ──
+       POST /api/user_books.php?action=bulk_status
+       { "ids": [3, 7, 9], "status": "Removed" | "Available" }
+       Only listings you own (any listing for Staff/Admin) that are currently
+       Available (to remove) or Removed (to put back) are changed; anything
+       else is skipped and reported back. */
+    if ($method === 'POST' && ($_GET['action'] ?? '') === 'bulk_status') {
+        $to = (string) ($payload['status'] ?? '');
+        if (!in_array($to, ['Removed', 'Available'], true)) {
+            Response::error('Status must be "Removed" or "Available".', 422);
         }
+        $ids = array_values(array_unique(array_filter(array_map('intval', (array) ($payload['ids'] ?? [])))));
+        if (!$ids) Response::error('Choose at least one listing.', 422);
+        if (count($ids) > 200) Response::error('You can change up to 200 listings at a time.', 422);
+
+        ensure_removed_status($pdo);
+        $from = $to === 'Removed' ? 'Available' : 'Removed';
+
+        $params = ['to' => $to, 'from' => $from];
+        $marks = [];
+        foreach ($ids as $i => $id) { $marks[] = ":id{$i}"; $params["id{$i}"] = $id; }
+        $in = implode(',', $marks);
+
+        $ownerSql = '';
+        if ($authUser['role'] === 'Customer') {
+            $ownerSql = ' AND seller_id = :uid';
+            $params['uid'] = (int) $authUser['user_id'];
+        }
+
+        // Which of the requested listings can actually change?
+        $find = $pdo->prepare("SELECT inventory_id FROM `USER_BOOKS` WHERE inventory_id IN ({$in}) AND status = :from{$ownerSql}");
+        $findParams = $params; unset($findParams['to']);
+        $find->execute($findParams);
+        $changeable = array_map('intval', $find->fetchAll(PDO::FETCH_COLUMN));
+
+        if ($changeable) {
+            $pdo->beginTransaction();
+            try {
+                $upd = $pdo->prepare("UPDATE `USER_BOOKS` SET status = :to WHERE inventory_id IN ({$in}) AND status = :from{$ownerSql}");
+                $upd->execute($params);
+                $pdo->commit();
+            } catch (Throwable $e) {
+                $pdo->rollBack();
+                Response::error('Could not update the listings. Nothing was changed.', 500);
+            }
+        }
+
+        Response::json([
+            'status'      => $to,
+            'updated'     => count($changeable),
+            'updated_ids' => $changeable,
+            'skipped_ids' => array_values(array_diff($ids, $changeable)),
+        ]);
     }
 }
 
