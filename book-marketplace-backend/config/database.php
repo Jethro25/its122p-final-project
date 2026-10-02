@@ -3,14 +3,26 @@
  * Database connection (PDO / MySQL).
  * LOCAL: uses defaults (root, no password, 127.0.0.1)
  * VERCEL + TiDB Cloud: set DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS
+ *
+ * TiDB Cloud only accepts encrypted (TLS) connections. PHP's MySQL driver
+ * turns TLS on when it is given a CA certificate, so we pass it
+ * isrgrootx1.pem (the Let's Encrypt root that signs TiDB's certificate).
  */
 
-// Suppress ALL deprecation warnings so they never pollute JSON output
+// Never let PHP warnings/notices print into the JSON response
+ini_set('display_errors', '0');
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
 
 function get_env_or(string $key, string $default): string {
     $value = getenv($key);
     return ($value === false || $value === '') ? $default : $value;
+}
+
+/* PHP 8.4+ uses Pdo\Mysql::ATTR_*, older PHP uses PDO::MYSQL_ATTR_* */
+function mysql_attr(string $name): ?int {
+    if (defined("Pdo\\Mysql::ATTR_{$name}")) return constant("Pdo\\Mysql::ATTR_{$name}");
+    if (defined("PDO::MYSQL_ATTR_{$name}"))  return constant("PDO::MYSQL_ATTR_{$name}");
+    return null;
 }
 
 $dbHost = get_env_or('DB_HOST', '127.0.0.1');
@@ -19,13 +31,9 @@ $dbName = get_env_or('DB_NAME', 'book_marketplace');
 $dbUser = get_env_or('DB_USER', 'root');
 $dbPass = get_env_or('DB_PASS', '');
 
-$isTiDB = ($dbHost !== '127.0.0.1' && $dbHost !== 'localhost');
+$isRemote = !in_array($dbHost, ['127.0.0.1', 'localhost'], true);
 
-// Build DSN — append ssl-mode for TiDB Cloud
 $dsn = "mysql:host={$dbHost};port={$dbPort};dbname={$dbName};charset=utf8mb4";
-if ($isTiDB) {
-    $dsn .= ';ssl-mode=REQUIRED';
-}
 
 $pdoOptions = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -34,12 +42,27 @@ $pdoOptions = [
     PDO::ATTR_TIMEOUT            => 10,
 ];
 
-// Use the new class-based constant on PHP 8.5, fall back to old one silently
-if ($isTiDB) {
-    if (defined('Pdo\Mysql::ATTR_SSL_VERIFY_SERVER_CERT')) {
-        $pdoOptions[Pdo\Mysql::ATTR_SSL_VERIFY_SERVER_CERT] = false;
-    } elseif (defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
-        @$pdoOptions[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+if ($isRemote) {
+    /* First choice: the cert shipped with the project; otherwise the
+       server's own CA bundle (paths used by Vercel / common Linux images) */
+    $caCandidates = [
+        __DIR__ . '/isrgrootx1.pem',
+        '/etc/pki/tls/certs/ca-bundle.crt',
+        '/etc/ssl/certs/ca-certificates.crt',
+        '/etc/ssl/cert.pem',
+    ];
+    $caFile = null;
+    foreach ($caCandidates as $candidate) {
+        if (is_readable($candidate)) { $caFile = $candidate; break; }
+    }
+
+    $caAttr = mysql_attr('SSL_CA');
+    if ($caFile !== null && $caAttr !== null) {
+        $pdoOptions[$caAttr] = $caFile;
+    }
+    $verifyAttr = mysql_attr('SSL_VERIFY_SERVER_CERT');
+    if ($verifyAttr !== null) {
+        $pdoOptions[$verifyAttr] = true;
     }
 }
 
