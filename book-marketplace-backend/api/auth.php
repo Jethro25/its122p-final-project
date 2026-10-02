@@ -54,7 +54,34 @@ try {
             'email_identifier' => $identifier,
         ]);
         $user = $stmt->fetch();
+        /* ── RATE LIMITING ────────────────────────────────────────────────
+           3 wrong passwords are allowed. The 4th wrong password locks the
+           account by setting USER.status = 'Locked' in the database, so the
+           lock survives refreshes, new browsers and new devices. Only an
+           Admin can unlock it (Admin → Users → Unlock).
+           ──────────────────────────────────────────────────────────────── */
+        $maxAttempts = 3;
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS `LOGIN_ATTEMPTS` (
+                `attempt_id`   INT UNSIGNED AUTO_INCREMENT NOT NULL,
+                `user_id`      INT UNSIGNED NOT NULL,
+                `attempted_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`attempt_id`),
+                INDEX `idx_la_user` (`user_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+        );
+        $lockedResponse = function (string $username) use ($maxAttempts): void {
+            Response::json([
+                'error'        => 'Your account is locked because of too many incorrect password attempts. Please contact an administrator to unlock it.',
+                'locked'       => true,
+                'username'     => $username,
+                'max_attempts' => $maxAttempts,
+            ], 423);
+        };
+
         if (!$user) Response::error('Invalid username/email or password.', 401);
+
+        if ($user['status'] === 'Locked') $lockedResponse((string) $user['username']);
 
         $hash = (string) $user['password_hash'];
         $valid = $hash !== '' && password_verify($password, $hash);
@@ -73,8 +100,47 @@ try {
             $valid = true;
         }
 
-        if (!$valid) Response::error('Invalid username/email or password.', 401);
+        if (!$valid) {
+            // Only Active accounts are counted; Suspended/Banned get the plain error.
+            if ($user['status'] !== 'Active') Response::error('Invalid username/email or password.', 401);
+
+            $uid = (int) $user['user_id'];
+            $pdo->prepare('INSERT INTO `LOGIN_ATTEMPTS` (user_id, attempted_at) VALUES (:uid, UTC_TIMESTAMP())')
+                ->execute(['uid' => $uid]);
+            $countStmt = $pdo->prepare('SELECT COUNT(*) FROM `LOGIN_ATTEMPTS` WHERE user_id = :uid');
+            $countStmt->execute(['uid' => $uid]);
+            $failed = (int) $countStmt->fetchColumn();
+
+            if ($failed > $maxAttempts) {
+                $lock = $pdo->prepare("UPDATE `USER` SET status = 'Locked' WHERE user_id = :uid");
+                try {
+                    $lock->execute(['uid' => $uid]);
+                } catch (PDOException $e) {
+                    // Older schemas lack 'Locked' in the status ENUM — add it, then retry.
+                    $pdo->exec("ALTER TABLE `USER` MODIFY `status` ENUM('Active','Suspended','Banned','Pending Verification','Locked') NOT NULL DEFAULT 'Pending Verification'");
+                    $lock->execute(['uid' => $uid]);
+                }
+                // Reset the counter so the user starts fresh once an Admin unlocks them.
+                $pdo->prepare('DELETE FROM `LOGIN_ATTEMPTS` WHERE user_id = :uid')->execute(['uid' => $uid]);
+                $lockedResponse((string) $user['username']);
+            }
+
+            $finalWarning = ($failed === $maxAttempts);
+            Response::json([
+                'error'         => $finalWarning
+                    ? 'Incorrect password. This was your last allowed attempt — one more incorrect password will lock your account.'
+                    : 'Incorrect password.',
+                'locked'        => false,
+                'attempts_used' => $failed,
+                'max_attempts'  => $maxAttempts,
+                'final_warning' => $finalWarning,
+            ], 401);
+        }
+
         if ($user['status'] !== 'Active') Response::error('This account is not active and cannot sign in.', 403);
+
+        // Successful sign-in clears the failed-attempt counter.
+        $pdo->prepare('DELETE FROM `LOGIN_ATTEMPTS` WHERE user_id = :uid')->execute(['uid' => (int) $user['user_id']]);
 
         $token = issue_auth_token($user);
         Response::json([

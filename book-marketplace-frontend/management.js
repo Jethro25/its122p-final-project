@@ -148,7 +148,7 @@ function badge(value) {
     let cls = "muted";
     if (["Active","Accepted","Approved","Completed","Resolved"].includes(text)) cls = "success";
     if (["Pending","Pending Verification","Under_Review","In_transaction","Disputed"].includes(text)) cls = "warning";
-    if (["Suspended","Banned","Rejected","Cancelled","Removed","Dismissed"].includes(text)) cls = "danger";
+    if (["Suspended","Banned","Locked","Rejected","Cancelled","Removed","Dismissed"].includes(text)) cls = "danger";
     return `<span class="management-badge ${cls}">${mgEscape(text.replaceAll("_"," "))}</span>`;
 }
 
@@ -294,7 +294,7 @@ function renderUsersTable() {
                 </td>
                 <td>
                     <select data-user-status="${user.user_id}">
-                        ${["Active","Suspended","Banned","Pending Verification"].map(s => `<option value="${s}" ${selected(s,user.status)}>${s}</option>`).join("")}
+                        ${["Active","Suspended","Banned","Pending Verification","Locked"].map(s => `<option value="${s}" ${selected(s,user.status)}>${s}</option>`).join("")}
                     </select>
                 </td>
                 <td>
@@ -304,6 +304,7 @@ function renderUsersTable() {
                 <td>${formatDate(user.created_at)}</td>
                 <td>
                     <div class="management-actions">
+                        ${user.status === "Locked" && managementState.role === "admin" ? `<button class="management-btn success small" onclick="unlockUser(${user.user_id})">Unlock</button>` : ""}
                         <button class="management-btn primary small" onclick="saveUser(${user.user_id})">Save</button>
                         ${canDelete ? `<button class="management-btn danger small" onclick="deleteUser(${user.user_id})">Delete</button>` : ""}
                     </div>
@@ -333,6 +334,22 @@ async function saveUser(userId) {
         });
 
         showMgmtAlert("User account updated.", "success");
+        await loadAllUsers();
+        renderUsersTable();
+        renderDashboardStats();
+    } catch (error) {
+        showMgmtAlert(error.message, "error");
+    }
+}
+
+async function unlockUser(userId) {
+    try {
+        await mgApi(`user.php?id=${userId}`, {
+            method: "PUT",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({ status: "Active" })
+        });
+        showMgmtAlert("Account unlocked. The user can sign in again.", "success");
         await loadAllUsers();
         renderUsersTable();
         renderDashboardStats();

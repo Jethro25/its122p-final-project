@@ -20,7 +20,7 @@ $crud = new Crud(
     required: ['username', 'email', 'password_hash'],
     enums: [
         'role'   => ['Customer', 'Staff', 'Admin'],
-        'status' => ['Active', 'Suspended', 'Banned', 'Pending Verification'],
+        'status' => ['Active', 'Suspended', 'Banned', 'Pending Verification', 'Locked'],
     ],
 );
 

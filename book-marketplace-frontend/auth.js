@@ -188,12 +188,122 @@ async function clearCurrentUser() {
  * Processes Customer login form submission
  * @param {Event} event
  */
+/* ==========================================================================
+   LOGIN RATE LIMITING (display side)
+   The server is the source of truth: it counts wrong passwords and locks the
+   account in the database on the 4th one. This code only explains what is
+   happening and remembers locked accounts so a refresh still shows the lock.
+   ========================================================================== */
+const LOCKED_ACCOUNTS_KEY = "librowseLockedAccounts";
+const LAST_LOCKED_KEY = "librowseLastLockedAccount";
+
+function getLockedAccounts() {
+    try { return JSON.parse(localStorage.getItem(LOCKED_ACCOUNTS_KEY) || "[]"); }
+    catch (_) { return []; }
+}
+function isAccountMarkedLocked(identifier) {
+    return !!identifier && getLockedAccounts().includes(identifier.toLowerCase().trim());
+}
+function markAccountLocked(identifier, username) {
+    const list = new Set(getLockedAccounts());
+    [identifier, username].filter(Boolean).forEach(v => list.add(String(v).toLowerCase().trim()));
+    try {
+        localStorage.setItem(LOCKED_ACCOUNTS_KEY, JSON.stringify([...list]));
+        localStorage.setItem(LAST_LOCKED_KEY, identifier);
+    } catch (_) {}
+}
+function forgetLockedAccount(identifier) {
+    const key = String(identifier || "").toLowerCase().trim();
+    try {
+        localStorage.setItem(LOCKED_ACCOUNTS_KEY, JSON.stringify(getLockedAccounts().filter(v => v !== key)));
+        if ((localStorage.getItem(LAST_LOCKED_KEY) || "").toLowerCase() === key) localStorage.removeItem(LAST_LOCKED_KEY);
+    } catch (_) {}
+}
+
+function attemptDots(used, max) {
+    let dots = "";
+    for (let i = 1; i <= max; i++) dots += `<span class="attempt-dot${i <= used ? " used" : ""}"></span>`;
+    return `<span class="attempt-dots" aria-hidden="true">${dots}</span>`;
+}
+
+function showAttemptWarning(used, max, finalWarning) {
+    const messageEl = document.getElementById("auth-message");
+    if (!messageEl) return;
+    const left = Math.max(max - used, 0);
+    messageEl.className = finalWarning ? "auth-message auth-warning" : "auth-message auth-error";
+    messageEl.style.display = "flex";
+    messageEl.innerHTML = finalWarning
+        ? `<div><strong>Incorrect password — last chance.</strong>
+             You have used all ${max} attempts. <strong>One more incorrect password will lock your account</strong>,
+             and only an administrator can unlock it.
+             <div class="attempt-row">${attemptDots(used, max)} Attempt ${used} of ${max}</div></div>`
+        : `<div><strong>Incorrect password.</strong>
+             You have ${left} attempt${left === 1 ? "" : "s"} left before the final warning.
+             After ${max} incorrect attempts, the next one locks your account.
+             <div class="attempt-row">${attemptDots(used, max)} Attempt ${used} of ${max}</div></div>`;
+}
+
+function setLoginLocked(locked, identifier) {
+    const submitBtn = document.getElementById("login-submit-btn");
+    const messageEl = document.getElementById("auth-message");
+    if (!submitBtn) return;
+    const label = submitBtn.querySelector("span");
+
+    if (!locked) {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove("btn-locked");
+        if (label) label.textContent = "Sign In";
+        return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.classList.add("btn-locked");
+    if (label) label.textContent = "Account locked";
+    if (messageEl) {
+        messageEl.className = "auth-message auth-message-locked";
+        messageEl.style.display = "block";
+        messageEl.innerHTML = `
+            <strong class="lock-title">This account is locked</strong>
+            <span>${escapeHTML(identifier || "This account")} was locked after too many incorrect password attempts.
+            For your security, signing in is blocked until an <strong>administrator unlocks the account</strong>.
+            Please contact the Librowse admin team.</span>
+            <button type="button" class="lock-retry-link" id="lock-retry-link">An admin already unlocked it? Try again</button>`;
+        document.getElementById("lock-retry-link")?.addEventListener("click", () => {
+            forgetLockedAccount(identifier);
+            setLoginLocked(false);
+            showMessage("Enter your password to try again. If the account is still locked, you will see this notice again.", "info");
+            document.getElementById("login-password")?.focus();
+        });
+    }
+}
+
+/* Re-show the lock after a refresh, and when a locked username is typed in */
+function initLoginLockState() {
+    const idEl = document.getElementById("login-identifier");
+    if (!idEl) return;
+    const last = localStorage.getItem(LAST_LOCKED_KEY);
+    if (last && isAccountMarkedLocked(last)) {
+        idEl.value = last;
+        setLoginLocked(true, last);
+    }
+    idEl.addEventListener("input", () => {
+        const value = idEl.value.trim();
+        if (isAccountMarkedLocked(value)) {
+            setLoginLocked(true, value);
+        } else if (document.getElementById("login-submit-btn")?.classList.contains("btn-locked")) {
+            setLoginLocked(false);
+            showMessage("", "info");
+        }
+    });
+}
+
 async function handleLogin(event) {
     event.preventDefault();
     const identifier = document.getElementById("login-identifier")?.value.trim() || "";
     const password = document.getElementById("login-password")?.value || "";
     const submitBtn = document.getElementById("login-submit-btn");
 
+    if (isAccountMarkedLocked(identifier)) { setLoginLocked(true, identifier); return; }
     if (!identifier || !password) {
         showMessage("Please enter both your email/username and password.", "error");
         return;
@@ -201,6 +311,7 @@ async function handleLogin(event) {
     if (submitBtn) { submitBtn.disabled = true; submitBtn.querySelector("span").textContent = "Signing in..."; }
     showMessage("Authenticating with Librowse...", "info");
 
+    let lockedNow = false;
     try {
         const response = await fetch(`${API_BASE}/auth.php?action=login`, {
             method: "POST",
@@ -209,18 +320,38 @@ async function handleLogin(event) {
             body: JSON.stringify({ identifier, password })
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Unable to sign in.");
+
+        if (data.locked) {
+            lockedNow = true;
+            markAccountLocked(identifier, data.username);
+            setLoginLocked(true, identifier);
+            return;
+        }
+        if (!response.ok) {
+            if (data.attempts_used) {
+                showAttemptWarning(data.attempts_used, data.max_attempts || 3, !!data.final_warning);
+                const pw = document.getElementById("login-password");
+                if (pw) { pw.value = ""; pw.focus(); }
+                return;
+            }
+            throw new Error(data.error || "Unable to sign in.");
+        }
+
+        forgetLockedAccount(identifier);
         saveCurrentUser(data.user, data.token);
         const destination = data.user.role === "Admin" ? "admin.html" : data.user.role === "Staff" ? "staff.html" : "customer-dashboard.html";
         showMessage(`Welcome back, ${data.user.username}! Redirecting...`, "success");
         setTimeout(() => window.location.replace(destination), 250);
     } catch (error) {
         const detail = error instanceof TypeError
-            ? `Unable to reach ${API_BASE}. Check that the PHP API is running and that this page was opened over HTTP/HTTPS (not file://).`
+            ? `Unable to reach ${API_BASE}. Check your connection and try again.`
             : error.message;
         showMessage(`Unable to sign in: ${detail}`, "error");
     } finally {
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.querySelector("span").textContent = "Sign In"; }
+        if (submitBtn && !lockedNow && !submitBtn.classList.contains("btn-locked")) {
+            submitBtn.disabled = false;
+            submitBtn.querySelector("span").textContent = "Sign In";
+        }
     }
 }
 
@@ -304,6 +435,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     document.getElementById("login-form")?.addEventListener("submit", handleLogin);
+    initLoginLockState();
     document.getElementById("register-form")?.addEventListener("submit", handleRegister);
 
     document.querySelectorAll(".toggle-password-btn").forEach(button => button.addEventListener("click", () => {

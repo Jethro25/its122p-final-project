@@ -1074,3 +1074,52 @@ footer { background: #e9d6be; border-top-color: var(--rule-strong); color: var(-
     .welcome-art { width: 150px; right: 50%; transform: translateX(50%); }
     header h1::before { width: 28px; height: 28px; }
 }
+
+
+/* ---------- Login rate limiting ---------- */
+.login-security-note {
+    margin: 14px 0 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--muted);
+}
+.auth-message > div { flex: 1; }
+.auth-message.auth-warning {
+    color: #7a5512;
+    background: var(--warn-tint);
+    border-color: #ead3a6;
+}
+.attempt-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.attempt-dots { display: inline-flex; gap: 5px; }
+.attempt-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    opacity: .55;
+}
+.attempt-dot.used { background: currentColor; opacity: 1; }
+.auth-message-locked span { display: block; }
+.lock-retry-link {
+    display: inline;
+    margin-top: 10px;
+    padding: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--stamp);
+    background: none;
+    border: none;
+    border-radius: 0;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.lock-retry-link:hover { background: none; color: var(--ink); }
+.auth-message-locked strong { display: inline; margin: 0; font-size: inherit; }
+.auth-message-locked strong.lock-title { display: block; margin-bottom: 4px; font-size: 15px; }
