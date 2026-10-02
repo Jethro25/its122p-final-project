@@ -16,6 +16,14 @@
     let lastRendered = [];
     let typeFilter = "all";          // all | sale | trade
     let selectMode = false;          // "Manage my listings" mode
+    let mineGroup = "active";        // active | removed | history (inside "Only my listings")
+    const mineTabs = document.getElementById("mine-tabs");
+    function groupOf(l) {
+        const st = l.status || "Available";
+        if (st === "Removed") return "removed";
+        if (st === "Sold" || st === "Traded") return "history";
+        return "active";             // Available + On hold (pending request)
+    }
     const selected = new Set();      // inventory_ids picked in that mode
     const typeSelect = document.getElementById("filter-type");
 
@@ -62,7 +70,7 @@
     /* ---------- sort + "only mine" (applied to both views) ---------- */
     function arrange(listings) {
         let list = listings.slice();
-        if (mineEl && mineEl.checked) list = list.filter(isMine);
+        if (mineEl && mineEl.checked) list = list.filter(l => isMine(l) && groupOf(l) === mineGroup);
         else list = list.filter(isAvailable);
         if (typeFilter === "sale") list = list.filter(forSale);
         if (typeFilter === "trade") list = list.filter(forTrade);
@@ -85,13 +93,37 @@
         setCount("count-all", onShelf.length);
         setCount("count-sale", onShelf.filter(forSale).length);
         setCount("count-trade", onShelf.filter(forTrade).length);
+        const mineAll = all.filter(isMine);
+        ["active", "removed", "history"].forEach(g =>
+            setCount(`mine-count-${g}`, mineAll.filter(l => groupOf(l) === g).length));
         if (countEl) {
             const what = typeFilter === "sale" ? "for sale" : typeFilter === "trade" ? "for trade" : "available";
+            const n = listings.length, s = n === 1 ? "" : "s";
+            const mineText = {
+                active:  `${n} of your book${s} on the shelves`,
+                removed: `${n} book${s} you took off the shelves`,
+                history: `${n} book${s} you sold or traded`
+            };
             countEl.textContent = mineEl && mineEl.checked
-                ? `${listings.length} of your listing${listings.length === 1 ? "" : "s"} (including sold ones)`
-                : `${listings.length} book${listings.length === 1 ? "" : "s"} ${what} on the shelves`;
+                ? mineText[mineGroup]
+                : `${n} book${s} ${what} on the shelves`;
         }
 
+        if (!listings.length && mineEl && mineEl.checked) {
+            const empty = {
+                active:  ["Nothing on the shelves yet", "You don't have any books listed right now.", `<a class="photo-btn" href="list-book.html">List a book</a>`],
+                removed: ["No removed books", "Books you take off the shelves will wait here, so you can put them back anytime.", ""],
+                history: ["No sales or trades yet", "Books you sell or trade will be kept here as your history.", ""]
+            }[mineGroup];
+            shelf.innerHTML = `
+                <div class="shelf-empty">
+                    <img src="assets/books-stack.svg" alt="" width="160" height="135">
+                    <h3>${empty[0]}</h3>
+                    <p>${empty[1]}</p>
+                    ${empty[2]}
+                </div>`;
+            return;
+        }
         if (!listings.length) {
             shelf.innerHTML = `
                 <div class="shelf-empty">
@@ -137,6 +169,7 @@
         document.querySelectorAll("#filter-category-options input[type=checkbox]").forEach(cb => { cb.checked = false; });
         if (mineEl) mineEl.checked = false;
         if (selectMode) setSelectMode(false, false);
+        syncMineTabs();
         setTypeFilter("all", false);
         filterBooks();
     }
@@ -169,8 +202,27 @@
     typeSelect?.addEventListener("change", () => { if (typeSelect.value) setTypeFilter("all", false); });
 
     sortEl?.addEventListener("change", () => filterBooks());
+    function syncMineTabs() {
+        if (mineTabs) mineTabs.hidden = !(mineEl && mineEl.checked);
+    }
+    function setMineGroup(group, rerender = true) {
+        mineGroup = group;
+        document.querySelectorAll(".mine-tab").forEach(t => {
+            const on = t.dataset.group === group;
+            t.classList.toggle("active", on);
+            t.setAttribute("aria-selected", String(on));
+        });
+        selected.clear();
+        if (typeof hideConfirm === "function") hideConfirm();
+        if (rerender) filterBooks();
+    }
+    document.querySelectorAll(".mine-tab").forEach(t =>
+        t.addEventListener("click", () => setMineGroup(t.dataset.group)));
+
     mineEl?.addEventListener("change", () => {
         if (!mineEl.checked && selectMode) setSelectMode(false, false);
+        if (mineEl.checked) setMineGroup("active", false);
+        syncMineTabs();
         filterBooks();
     });
 
@@ -449,7 +501,10 @@
         els("bulk-remove").textContent = toRemove.length ? `Remove ${toRemove.length}` : "Remove";
         els("bulk-restore").disabled = !toRestore.length;
         els("bulk-restore").textContent = toRestore.length ? `Put back ${toRestore.length}` : "Put back";
-        els("bulk-restore").hidden = !lastRendered.some(l => l.status === "Removed" && isMine(l));
+        els("bulk-remove").hidden = mineGroup !== "active";
+        els("bulk-restore").hidden = mineGroup !== "removed";
+        els("bulk-all").hidden = els("bulk-none").hidden = mineGroup === "history";
+        if (mineGroup === "history") els("bulk-count").textContent = "Sold and traded books are kept as history";
     }
     function togglePick(id, card) {
         const listing = inventoryMap[id];
@@ -469,7 +524,8 @@
         manageBtn.textContent = on ? "Done managing" : "Manage my listings";
         shelf.classList.toggle("select-mode", on);
         hideConfirm();
-        if (on && mineEl && !mineEl.checked) mineEl.checked = true;   // only your books can be picked
+        if (on && mineEl && !mineEl.checked) { mineEl.checked = true; setMineGroup("active", false); }   // only your books can be picked
+        syncMineTabs();
         if (rerender) filterBooks();
         updateBar();
     }
@@ -526,13 +582,13 @@
             const n = changed.length;
             const note = skipped.length ? ` ${skipped.length} couldn't be changed (they may have a pending request).` : "";
             if (status === "Removed") {
-                toast(`${n} book${n === 1 ? "" : "s"} taken off the shelves.${note}`, n ? "Undo" : null, async () => {
+                toast(`${n} book${n === 1 ? "" : "s"} moved to Removed.${note}`, n ? "Undo" : null, async () => {
                     await bulkSetStatus(changed, "Available");
                     filterBooks(); updateBar();
                     toast(`${n} book${n === 1 ? "" : "s"} back on the shelves.`);
                 });
             } else {
-                toast(`${n} book${n === 1 ? "" : "s"} back on the shelves.${note}`);
+                toast(`${n} book${n === 1 ? "" : "s"} back on the shelves.${note}`, n ? "View" : null, () => setMineGroup("active"));
             }
         } catch (err) {
             toast(err.message || "Nothing was changed. Please try again.");

@@ -140,6 +140,19 @@
                 </div>
             </div>
 
+            <!-- My listings, organised (shown with "Only my listings") -->
+            <div id="mine-tabs" class="mine-tabs" role="tablist" aria-label="My listings" hidden>
+                <button type="button" role="tab" class="mine-tab active" data-group="active" aria-selected="true">
+                    <span class="mine-dot dot-active"></span>On the shelves <span class="chip-count" id="mine-count-active">0</span>
+                </button>
+                <button type="button" role="tab" class="mine-tab" data-group="removed" aria-selected="false">
+                    <span class="mine-dot dot-removed"></span>Removed <span class="chip-count" id="mine-count-removed">0</span>
+                </button>
+                <button type="button" role="tab" class="mine-tab" data-group="history" aria-selected="false">
+                    <span class="mine-dot dot-history"></span>Sold &amp; traded <span class="chip-count" id="mine-count-history">0</span>
+                </button>
+            </div>
+
             <!-- Shelf view (populated by browse-shelf.js) -->
             <div id="bookshelf" class="bookshelf" aria-live="polite">
                 <span class="shelf-skeleton"></span><span class="shelf-skeleton"></span><span class="shelf-skeleton"></span>
