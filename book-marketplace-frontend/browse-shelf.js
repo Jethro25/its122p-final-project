@@ -226,8 +226,22 @@
                     <div class="dialog-actions">
                         ${canBuy ? `<button type="button" id="dialog-buy">Buy this book</button>` : ""}
                         ${canTrade ? `<button type="button" id="dialog-trade" class="btn-clear">Offer a trade</button>` : ""}
-                        ${mine ? `<p class="dialog-note">This is your listing. Others can buy or trade for it from the shelves.</p>` : ""}
+                        ${mine && listing.status === "Removed" ? `<p class="dialog-note">You took this book off the shelves. Nobody else can see it.</p>
+                            <button type="button" id="dialog-relist">Put back on the shelf</button>` : ""}
+                        ${mine && (listing.status || "Available") === "Available" ? `<p class="dialog-note">This is your listing. Others can buy or trade for it from the shelves.</p>
+                            <button type="button" id="dialog-remove" class="btn-danger">Remove listing</button>` : ""}
+                        ${mine && listing.status === "In_transaction" ? `<p class="dialog-note">Someone has requested this book, so it can't be removed until that request is completed or cancelled.</p>` : ""}
+                        ${mine && (listing.status === "Sold" || listing.status === "Traded") ? `<p class="dialog-note">This book has been ${esc(listing.status.toLowerCase())}. It stays in your history.</p>` : ""}
                         ${st.out && !mine ? `<p class="dialog-note">This book is currently ${esc(st.label.toLowerCase())}, so it can't be requested right now.</p>` : ""}
+                    </div>
+                    <div class="remove-confirm" id="remove-confirm" hidden role="alertdialog" aria-labelledby="remove-confirm-text">
+                        <p id="remove-confirm-text"><strong>Take &ldquo;${esc(book?.title || "this book")}&rdquo; off the shelves?</strong>
+                        Other readers won&rsquo;t be able to see, buy or trade for it. You can put it back later from <em>Only my listings</em>.</p>
+                        <div class="remove-confirm-actions">
+                            <button type="button" id="remove-yes" class="btn-danger-solid">Yes, remove it</button>
+                            <button type="button" id="remove-no" class="btn-clear">Keep it listed</button>
+                        </div>
+                        <span class="remove-status" id="remove-status" role="status"></span>
                     </div>
                     <div class="trade-picker" id="trade-picker" hidden></div>
                 </div>
@@ -242,6 +256,7 @@
         });
         dialog.querySelector("#dialog-trade")?.addEventListener("click", () => showTradePicker(listing));
         if (mine) wireOwnerPhoto(listing, book);
+        if (mine) wireRemove(listing, book);
 
         if (typeof dialog.showModal === "function") dialog.showModal(); else dialog.setAttribute("open", "");
     }
@@ -320,6 +335,84 @@
             try { await save(null, "Photo removed. Showing the placeholder cover."); }
             catch (err) { status.textContent = err.message || "Could not remove the photo."; }
         });
+    }
+
+    /* ---------- remove / put back a listing ---------- */
+    async function setListingStatus(listing, status) {
+        await apiRequest(`user_books.php?id=${listing.inventory_id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status })
+        });
+        listing.status = status;
+        filterBooks();
+    }
+
+    function wireRemove(listing, book) {
+        const title = book?.title || "Your book";
+        const confirmBox = dialog.querySelector("#remove-confirm");
+        const statusEl = dialog.querySelector("#remove-status");
+        const removeBtn = dialog.querySelector("#dialog-remove");
+
+        removeBtn?.addEventListener("click", () => {
+            confirmBox.hidden = false;
+            removeBtn.hidden = true;
+            dialog.querySelector("#remove-no").focus();
+        });
+        dialog.querySelector("#remove-no")?.addEventListener("click", () => {
+            confirmBox.hidden = true;
+            if (removeBtn) { removeBtn.hidden = false; removeBtn.focus(); }
+        });
+        dialog.querySelector("#remove-yes")?.addEventListener("click", async (e) => {
+            const yes = e.currentTarget;
+            if (yes.disabled) return;                       // no double clicks
+            yes.disabled = true; yes.textContent = "Removing…";
+            try {
+                await setListingStatus(listing, "Removed");
+                dialog.close();
+                toast(`“${title}” was taken off the shelves.`, "Undo", async () => {
+                    await setListingStatus(listing, "Available");
+                    toast(`“${title}” is back on the shelves.`);
+                });
+            } catch (err) {
+                statusEl.textContent = err.message || "Could not remove the listing.";
+                yes.disabled = false; yes.textContent = "Yes, remove it";
+            }
+        });
+        dialog.querySelector("#dialog-relist")?.addEventListener("click", async (e) => {
+            const btn = e.currentTarget;
+            if (btn.disabled) return;
+            btn.disabled = true; btn.textContent = "Putting it back…";
+            try {
+                await setListingStatus(listing, "Available");
+                dialog.close();
+                toast(`“${title}” is back on the shelves.`);
+            } catch (err) {
+                btn.disabled = false; btn.textContent = "Put back on the shelf";
+                alert(err.message || "Could not put the listing back.");
+            }
+        });
+    }
+
+    /* Small message at the bottom of the screen, with an optional action */
+    let toastTimer = null;
+    function toast(message, actionLabel, onAction) {
+        let el = document.getElementById("shelf-toast");
+        if (!el) {
+            el = document.createElement("div");
+            el.id = "shelf-toast";
+            el.className = "shelf-toast";
+            el.setAttribute("role", "status");
+            document.body.appendChild(el);
+        }
+        el.innerHTML = `<span>${esc(message)}</span>${actionLabel ? `<button type="button">${esc(actionLabel)}</button>` : ""}`;
+        el.classList.add("show");
+        el.querySelector("button")?.addEventListener("click", async () => {
+            el.classList.remove("show");
+            try { await onAction(); } catch (err) { toast(err.message || "That didn't work."); }
+        }, { once: true });
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove("show"), 7000);
     }
 
     async function refreshShelf() {

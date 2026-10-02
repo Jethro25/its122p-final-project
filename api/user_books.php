@@ -37,11 +37,34 @@ if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
     /* Customers may only edit their own listings */
     if (($method === 'PUT' || $method === 'PATCH') && $authUser['role'] === 'Customer') {
         $id = $_GET['id'] ?? null;
-        $own = $pdo->prepare('SELECT seller_id FROM `USER_BOOKS` WHERE inventory_id = :id');
+        $own = $pdo->prepare('SELECT seller_id, status FROM `USER_BOOKS` WHERE inventory_id = :id');
         $own->execute(['id' => $id]);
-        $sellerId = $own->fetchColumn();
-        if ($sellerId !== false && (int) $sellerId !== (int) $authUser['user_id']) {
+        $current = $own->fetch();
+        if ($current && (int) $current['seller_id'] !== (int) $authUser['user_id']) {
             Response::error('You can only change your own listings.', 403);
+        }
+
+        /* Removing / re-listing: a seller may only take an available book off
+           the shelf (Removed) or put a removed one back (Available). Books with
+           a pending purchase or trade, or already sold/traded, can't be changed. */
+        if ($current && array_key_exists('status', $payload)) {
+            $from = (string) $current['status'];
+            $to = (string) $payload['status'];
+            $allowed = ($from === 'Available' && $to === 'Removed') || ($from === 'Removed' && $to === 'Available');
+            if (!$allowed) {
+                $msg = $from === 'In_transaction'
+                    ? 'This book has a pending purchase or trade request, so it can\'t be removed right now.'
+                    : 'This listing can no longer be changed.';
+                Response::error($msg, 409);
+            }
+        }
+    }
+
+    /* Older databases may be missing 'Removed' in the status list — add it */
+    if (($method === 'PUT' || $method === 'PATCH') && array_key_exists('status', $payload)) {
+        $col = $pdo->query("SHOW COLUMNS FROM `USER_BOOKS` LIKE 'status'")->fetch();
+        if ($col && strpos((string) $col['Type'], "'Removed'") === false) {
+            $pdo->exec("ALTER TABLE `USER_BOOKS` MODIFY `status` ENUM('Available','In_transaction','Sold','Traded','Removed','Reserved','Delisted') NOT NULL DEFAULT 'Available'");
         }
     }
 }

@@ -1451,3 +1451,36 @@ input:focus-visible + .photo-btn, .photo-btn:focus-within { outline: 3px solid v
     color: var(--ink); background: var(--paper); border-radius: 999px;
 }
 .type-chip.active .chip-count { background: rgba(255,250,243,.25); color: #fffaf3; }
+
+/* ---------- Remove listing ---------- */
+button.btn-danger {
+    color: var(--stamp); background: transparent; border-color: #e5bdb6;
+}
+button.btn-danger:hover { background: var(--stamp-tint); border-color: var(--stamp); }
+button.btn-danger-solid { background: var(--stamp); }
+button.btn-danger-solid:hover { background: #9a4f45; }
+.dialog-actions .dialog-note { flex-basis: 100%; }
+.remove-confirm {
+    margin-top: 16px; padding: 16px 18px;
+    background: var(--stamp-tint); border: 1px solid #ebc4bc; border-radius: 12px;
+}
+.remove-confirm p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
+.remove-confirm p strong { display: block; margin-bottom: 4px; color: var(--ink); }
+.remove-confirm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.remove-status { display: block; margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--stamp); min-height: 1em; }
+
+.shelf-toast {
+    position: fixed; z-index: 100; left: 50%; bottom: 24px;
+    display: flex; align-items: center; gap: 14px;
+    max-width: calc(100vw - 32px); padding: 12px 14px 12px 18px;
+    font-size: 14px; font-weight: 600; color: #fffaf3;
+    background: var(--ink); border-radius: 999px;
+    box-shadow: 0 14px 30px -12px rgba(43,30,22,.6);
+    transform: translate(-50%, 140%); opacity: 0;
+    transition: transform .3s cubic-bezier(.2,.8,.3,1.1), opacity .3s;
+}
+.shelf-toast.show { transform: translate(-50%, 0); opacity: 1; }
+.shelf-toast button {
+    padding: 6px 14px; font-size: 13px; color: var(--ink); background: var(--tab);
+}
+.shelf-toast button:hover { background: #f0c75c; }
