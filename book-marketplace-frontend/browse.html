@@ -113,6 +113,13 @@
 
 
 
+            <!-- Quick filters: what is the book listed for? -->
+            <div class="type-filter" role="group" aria-label="Show books that are">
+                <button type="button" class="type-chip active" data-type="all" aria-pressed="true">All books <span class="chip-count" id="count-all">0</span></button>
+                <button type="button" class="type-chip" data-type="sale" aria-pressed="false">For sale <span class="chip-count" id="count-sale">0</span></button>
+                <button type="button" class="type-chip" data-type="trade" aria-pressed="false">For trade <span class="chip-count" id="count-trade">0</span></button>
+            </div>
+
             <!-- Shelf toolbar -->
             <div class="shelf-toolbar">
                 <p id="shelf-count" class="shelf-count" role="status">Opening the stacks&hellip;</p>
@@ -121,8 +128,7 @@
                     <label class="sort-label" for="shelf-sort">Sort</label>
                     <select id="shelf-sort">
                         <option value="newest">Newest on the shelf</option>
-                        <option value="available">Available first</option>
-                        <option value="title">Title A&ndash;Z</option>
+                                                <option value="title">Title A&ndash;Z</option>
                         <option value="price-asc">Price: low to high</option>
                         <option value="price-desc">Price: high to low</option>
                     </select>

@@ -14,6 +14,14 @@
     const mineEl = document.getElementById("filter-mine");
     const dialog = document.getElementById("book-dialog");
     let lastRendered = [];
+    let typeFilter = "all";          // all | sale | trade
+    const typeSelect = document.getElementById("filter-type");
+
+    /* Sold, traded and on-hold books are taken off the shelves automatically.
+       Sellers still see their own via "Only my listings". */
+    function isAvailable(l) { return (l.status || "Available") === "Available"; }
+    function forSale(l) { return l.listing_type === "For_sale" || l.listing_type === "Both"; }
+    function forTrade(l) { return l.listing_type === "For_trade" || l.listing_type === "Both"; }
 
     function esc(s) {
         return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -53,6 +61,9 @@
     function arrange(listings) {
         let list = listings.slice();
         if (mineEl && mineEl.checked) list = list.filter(isMine);
+        else list = list.filter(isAvailable);
+        if (typeFilter === "sale") list = list.filter(forSale);
+        if (typeFilter === "trade") list = list.filter(forTrade);
         const by = sortEl ? sortEl.value : "newest";
         const title = l => (bookOf(l)?.title || "").toLowerCase();
         const price = l => (l.price === null || l.price === "" || l.price === undefined) ? Infinity : Number(l.price);
@@ -60,18 +71,23 @@
         if (by === "price-asc") list.sort((a, b) => price(a) - price(b));
         if (by === "price-desc") list.sort((a, b) => (price(b) === Infinity ? -1 : price(b)) - (price(a) === Infinity ? -1 : price(a)));
         if (by === "newest") list.sort((a, b) => String(b.listed_at || b.inventory_id).localeCompare(String(a.listed_at || a.inventory_id)) || b.inventory_id - a.inventory_id);
-        if (by === "available") list.sort((a, b) => statusInfo(a).out - statusInfo(b).out);
         return list;
     }
 
     /* ---------- shelf rendering ---------- */
     function renderShelf(listings) {
         lastRendered = listings;
-        const total = typeof bookListings !== "undefined" ? bookListings.length : listings.length;
+        const all = typeof bookListings !== "undefined" ? bookListings : listings;
+        const onShelf = all.filter(isAvailable);
+        const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+        setCount("count-all", onShelf.length);
+        setCount("count-sale", onShelf.filter(forSale).length);
+        setCount("count-trade", onShelf.filter(forTrade).length);
         if (countEl) {
-            countEl.textContent = listings.length === total
-                ? `${total} book${total === 1 ? "" : "s"} on the shelves`
-                : `Showing ${listings.length} of ${total} books`;
+            const what = typeFilter === "sale" ? "for sale" : typeFilter === "trade" ? "for trade" : "available";
+            countEl.textContent = mineEl && mineEl.checked
+                ? `${listings.length} of your listing${listings.length === 1 ? "" : "s"} (including sold ones)`
+                : `${listings.length} book${listings.length === 1 ? "" : "s"} ${what} on the shelves`;
         }
 
         if (!listings.length) {
@@ -114,6 +130,7 @@
         ["filter-type", "filter-condition"].forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
         document.querySelectorAll("#filter-category-options input[type=checkbox]").forEach(cb => { cb.checked = false; });
         if (mineEl) mineEl.checked = false;
+        setTypeFilter("all", false);
         filterBooks();
     }
 
@@ -127,6 +144,21 @@
     // Function declarations in script.js resolve through the global object,
     // so reassigning the global makes script.js call the wrapped version.
     try { renderBooks = window.renderBooks; } catch (_) {}
+
+    function setTypeFilter(value, rerender = true) {
+        typeFilter = value;
+        document.querySelectorAll(".type-chip").forEach(chip => {
+            const on = chip.dataset.type === value;
+            chip.classList.toggle("active", on);
+            chip.setAttribute("aria-pressed", String(on));
+        });
+        // The chips replace the "Listing type" dropdown, so keep that at "All"
+        if (typeSelect && value !== "all") typeSelect.value = "";
+        if (rerender) filterBooks();
+    }
+    document.querySelectorAll(".type-chip").forEach(chip =>
+        chip.addEventListener("click", () => setTypeFilter(chip.dataset.type)));
+    typeSelect?.addEventListener("change", () => { if (typeSelect.value) setTypeFilter("all", false); });
 
     sortEl?.addEventListener("change", () => filterBooks());
     mineEl?.addEventListener("change", () => filterBooks());

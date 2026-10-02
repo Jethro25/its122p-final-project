@@ -1436,3 +1436,18 @@ input:focus-visible + .photo-btn, .photo-btn:focus-within { outline: 3px solid v
 }
 .trade-option input[type="radio"] { width: 16px; height: 16px; flex: none; padding: 0; accent-color: var(--spine); }
 [hidden] { display: none !important; }
+
+/* ---------- Browse quick filters ---------- */
+.type-filter { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 6px; }
+.type-chip {
+    gap: 8px; padding: 9px 16px;
+    font-size: 14px; font-weight: 700; color: var(--ink-2);
+    background: var(--surface); border: 1px solid var(--rule-strong);
+}
+.type-chip:hover { background: var(--paper); color: var(--ink); border-color: var(--spine); }
+.type-chip.active { color: #fffaf3; background: var(--spine); border-color: var(--spine); }
+.chip-count {
+    min-width: 22px; padding: 1px 7px; font-size: 12px; text-align: center;
+    color: var(--ink); background: var(--paper); border-radius: 999px;
+}
+.type-chip.active .chip-count { background: rgba(255,250,243,.25); color: #fffaf3; }

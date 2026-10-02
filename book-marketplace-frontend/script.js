@@ -1888,3 +1888,48 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (hasTransactions) await loadTransactions();
     if (hasCategories) await loadCategories();
 });
+
+
+/* ==========================================================================
+   DOUBLE-SUBMISSION GUARD
+   A form that is already sending is locked: extra clicks, Enter presses or
+   Ctrl+S are ignored until the server answers, and the button shows
+   "Processing…". This stops the same listing/refund/report being saved twice.
+   ========================================================================== */
+function guardFormSubmit(handler) {
+    return async function (event) {
+        if (event && typeof event.preventDefault === "function") event.preventDefault();
+        const form = event && event.currentTarget instanceof HTMLFormElement
+            ? event.currentTarget
+            : (event && event.target && event.target.closest ? event.target.closest("form") : null);
+
+        if (form && form.dataset.submitting === "true") return;   // already sending — ignore
+        const button = form ? form.querySelector('button[type="submit"]') : null;
+        const label = button ? button.textContent : "";
+
+        if (form) {
+            form.dataset.submitting = "true";
+            form.setAttribute("aria-busy", "true");
+        }
+        if (button) {
+            button.disabled = true;
+            button.textContent = "Processing…";
+        }
+        try {
+            return await handler.call(this, event);
+        } finally {
+            if (form) {
+                delete form.dataset.submitting;
+                form.removeAttribute("aria-busy");
+            }
+            if (button) {
+                button.disabled = false;
+                button.textContent = label;
+            }
+        }
+    };
+}
+
+submitBookListing = guardFormSubmit(submitBookListing);
+submitRefund = guardFormSubmit(submitRefund);
+submitReport = guardFormSubmit(submitReport);
