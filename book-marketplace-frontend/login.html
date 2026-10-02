@@ -19,10 +19,6 @@
     <header>
         <h1>Librowse Book Exchange</h1>
 
-        <p>
-            Sign in to access your marketplace or management tools.
-        </p>
-
         <nav>
             <a href="index.html">Marketplace</a>
             <a href="login.html" class="active-nav">Sign In</a>
@@ -86,7 +82,7 @@
                     </div>
                 </div>
 
-                <p class="login-security-note">For your security, an account is locked after 3 incorrect password attempts. A locked account can only be unlocked by an administrator.</p>
+                <p class="login-security-note">For your security, an account is locked after 3 incorrect password attempts. A locked account can only be unlocked by an administrator. <button type="button" class="text-link" id="unlock-link">Locked out? Request an unlock</button></p>
 
                 <button type="submit" id="login-submit-btn" class="auth-submit-btn">
                     <span>Sign In</span>
@@ -131,6 +127,29 @@
         </section>
 
     </main>
+
+<dialog id="unlock-dialog" class="unlock-dialog" aria-labelledby="unlock-title">
+    <form id="unlock-form" method="dialog" novalidate>
+        <button type="button" class="dialog-close" id="unlock-close" aria-label="Close">&times;</button>
+        <h2 id="unlock-title">Request an unlock</h2>
+        <p class="unlock-intro">Tell us which account is locked. An administrator will review it and unlock it, then you can sign in again with your password.</p>
+        <label for="unlock-identifier">Username or email</label>
+        <input type="text" id="unlock-identifier" autocomplete="username" required placeholder="emma_clarke or you@example.com">
+        <span class="field-error" id="unlock-identifier-error"></span>
+        <label for="unlock-message">Message for the admin <span class="optional-tag">optional</span></label>
+        <textarea id="unlock-message" maxlength="1000" rows="3" placeholder="e.g. I forgot my password and tried a few times."></textarea>
+        <div class="unlock-actions">
+            <button type="submit" id="unlock-submit">Send request</button>
+            <button type="button" class="btn-clear" id="unlock-cancel">Cancel</button>
+        </div>
+        <div class="unlock-done" id="unlock-done" hidden role="status">
+            <strong>Request sent.</strong>
+            <span id="unlock-done-text"></span>
+            <button type="button" id="unlock-done-close">Back to sign in</button>
+        </div>
+    </form>
+</dialog>
+
 
 
     <!-- FOOTER -->

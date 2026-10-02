@@ -265,9 +265,12 @@ function setLoginLocked(locked, identifier) {
         messageEl.innerHTML = `
             <strong class="lock-title">This account is locked</strong>
             <span>${escapeHTML(identifier || "This account")} was locked after too many incorrect password attempts.
-            For your security, signing in is blocked until an <strong>administrator unlocks the account</strong>.
-            Please contact the Librowse admin team.</span>
-            <button type="button" class="lock-retry-link" id="lock-retry-link">An admin already unlocked it? Try again</button>`;
+            For your security, signing in is blocked until an <strong>administrator unlocks the account</strong>.</span>
+            <div class="lock-actions">
+                <button type="button" class="lock-request-btn" id="lock-request-btn">Request an unlock</button>
+                <button type="button" class="lock-retry-link" id="lock-retry-link">An admin already unlocked it? Try again</button>
+            </div>`;
+        document.getElementById("lock-request-btn")?.addEventListener("click", () => openUnlockDialog(identifier));
         document.getElementById("lock-retry-link")?.addEventListener("click", () => {
             forgetLockedAccount(identifier);
             setLoginLocked(false);
@@ -275,6 +278,72 @@ function setLoginLocked(locked, identifier) {
             document.getElementById("login-password")?.focus();
         });
     }
+}
+
+/* ---------- "Request an unlock" (works without signing in) ---------- */
+function openUnlockDialog(identifier) {
+    const dlg = document.getElementById("unlock-dialog");
+    if (!dlg) return;
+    const idEl = document.getElementById("unlock-identifier");
+    idEl.value = identifier || document.getElementById("login-identifier")?.value.trim() || "";
+    document.getElementById("unlock-message").value = "";
+    document.getElementById("unlock-identifier-error").style.display = "none";
+    document.getElementById("unlock-done").hidden = true;
+    dlg.querySelectorAll(".unlock-hide-when-done").forEach(el => el.hidden = false);
+    if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+    (idEl.value ? document.getElementById("unlock-message") : idEl).focus();
+}
+
+function initUnlockRequest() {
+    const dlg = document.getElementById("unlock-dialog");
+    const form = document.getElementById("unlock-form");
+    if (!dlg || !form) return;
+    // Everything except the success box is hidden once the request is sent
+    ["unlock-intro", "unlock-actions"].forEach(cls => form.querySelector("." + cls)?.classList.add("unlock-hide-when-done"));
+    form.querySelectorAll("label, input, textarea, .field-error").forEach(el => el.classList.add("unlock-hide-when-done"));
+
+    const close = () => dlg.close();
+    document.getElementById("unlock-link")?.addEventListener("click", () => openUnlockDialog());
+    document.getElementById("unlock-close")?.addEventListener("click", close);
+    document.getElementById("unlock-cancel")?.addEventListener("click", close);
+    document.getElementById("unlock-done-close")?.addEventListener("click", close);
+    dlg.addEventListener("click", e => { if (e.target === dlg) close(); });
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const submit = document.getElementById("unlock-submit");
+        if (submit.disabled) return;                          // no double sends
+        const identifier = document.getElementById("unlock-identifier").value.trim();
+        const message = document.getElementById("unlock-message").value.trim();
+        const err = document.getElementById("unlock-identifier-error");
+        if (!identifier) {
+            err.textContent = "Please enter the username or email of the locked account.";
+            err.style.display = "block";
+            return;
+        }
+        err.style.display = "none";
+        submit.disabled = true;
+        submit.textContent = "Sending…";
+        try {
+            const res = await fetch(`${API_BASE}/unlock_request.php`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ identifier, message })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Could not send the request.");
+            form.querySelectorAll(".unlock-hide-when-done").forEach(el => el.hidden = true);
+            document.getElementById("unlock-done-text").textContent = data.message;
+            document.getElementById("unlock-done").hidden = false;
+            document.getElementById("unlock-done-close").focus();
+        } catch (error) {
+            err.textContent = error instanceof TypeError ? "Couldn't reach the server. Check your connection and try again." : error.message;
+            err.style.display = "block";
+        } finally {
+            submit.disabled = false;
+            submit.textContent = "Send request";
+        }
+    });
 }
 
 /* Re-show the lock after a refresh, and when a locked username is typed in */
@@ -436,6 +505,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     document.getElementById("login-form")?.addEventListener("submit", handleLogin);
     initLoginLockState();
+    initUnlockRequest();
     document.getElementById("register-form")?.addEventListener("submit", handleRegister);
 
     document.querySelectorAll(".toggle-password-btn").forEach(button => button.addEventListener("click", () => {

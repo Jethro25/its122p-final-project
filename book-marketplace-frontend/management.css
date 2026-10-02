@@ -481,3 +481,5 @@ body.management-body {
     opacity: .9;
 }
 @media (max-width: 800px) { .management-sidebar-bottom::before { display: none; } }
+
+.unlock-request-cell { display: flex; flex-direction: column; gap: 4px; max-width: 320px; font-size: 13px; }

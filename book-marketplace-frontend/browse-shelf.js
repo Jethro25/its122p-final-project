@@ -291,7 +291,8 @@
                         ${canBuy ? `<button type="button" id="dialog-buy">Buy this book</button>` : ""}
                         ${canTrade ? `<button type="button" id="dialog-trade" class="btn-clear">Offer a trade</button>` : ""}
                         ${mine && listing.status === "Removed" ? `<p class="dialog-note">You took this book off the shelves. Nobody else can see it.</p>
-                            <button type="button" id="dialog-relist">Put back on the shelf</button>` : ""}
+                            <button type="button" id="dialog-relist">Put back on the shelf</button>
+                            <button type="button" id="dialog-delete" class="btn-danger">Delete permanently</button>` : ""}
                         ${mine && (listing.status || "Available") === "Available" ? `<p class="dialog-note">This is your listing. Others can buy or trade for it from the shelves.</p>
                             <button type="button" id="dialog-remove" class="btn-danger">Remove listing</button>` : ""}
                         ${mine && listing.status === "In_transaction" ? `<p class="dialog-note">Someone has requested this book, so it can't be removed until that request is completed or cancelled.</p>` : ""}
@@ -306,6 +307,15 @@
                             <button type="button" id="remove-no" class="btn-clear">Keep it listed</button>
                         </div>
                         <span class="remove-status" id="remove-status" role="status"></span>
+                    </div>
+                    <div class="remove-confirm delete-confirm" id="delete-confirm" hidden role="alertdialog" aria-labelledby="delete-confirm-text">
+                        <p id="delete-confirm-text"><strong>Delete &ldquo;${esc(book?.title || "this book")}&rdquo; permanently?</strong>
+                        The listing and its photo will be erased for good. <strong class="inline-strong">This can&rsquo;t be undone.</strong></p>
+                        <div class="remove-confirm-actions">
+                            <button type="button" id="delete-yes" class="btn-danger-solid">Yes, delete forever</button>
+                            <button type="button" id="delete-no" class="btn-clear">Keep it</button>
+                        </div>
+                        <span class="remove-status" id="delete-status" role="status"></span>
                     </div>
                     <div class="trade-picker" id="trade-picker" hidden></div>
                 </div>
@@ -443,6 +453,36 @@
                 yes.disabled = false; yes.textContent = "Yes, remove it";
             }
         });
+        const deleteBtn = dialog.querySelector("#dialog-delete");
+        const deleteBox = dialog.querySelector("#delete-confirm");
+        deleteBtn?.addEventListener("click", () => {
+            deleteBox.hidden = false;
+            deleteBtn.hidden = true;
+            dialog.querySelector("#delete-no").focus();
+        });
+        dialog.querySelector("#delete-no")?.addEventListener("click", () => {
+            deleteBox.hidden = true;
+            deleteBtn.hidden = false;
+            deleteBtn.focus();
+        });
+        dialog.querySelector("#delete-yes")?.addEventListener("click", async (e) => {
+            const yes = e.currentTarget;
+            if (yes.disabled) return;
+            yes.disabled = true; yes.textContent = "Deleting…";
+            try {
+                const { deleted, skipped } = await deleteListings([listing.inventory_id]);
+                if (deleted.length) {
+                    dialog.close();
+                    toast(`“${title}” was deleted permanently.`);
+                } else {
+                    dialog.querySelector("#delete-status").textContent = skipReason(skipped[0]);
+                    yes.disabled = false; yes.textContent = "Yes, delete forever";
+                }
+            } catch (err) {
+                dialog.querySelector("#delete-status").textContent = err.message || "Could not delete the listing.";
+                yes.disabled = false; yes.textContent = "Yes, delete forever";
+            }
+        });
         dialog.querySelector("#dialog-relist")?.addEventListener("click", async (e) => {
             const btn = e.currentTarget;
             if (btn.disabled) return;
@@ -503,6 +543,9 @@
         els("bulk-restore").textContent = toRestore.length ? `Put back ${toRestore.length}` : "Put back";
         els("bulk-remove").hidden = mineGroup !== "active";
         els("bulk-restore").hidden = mineGroup !== "removed";
+        els("bulk-delete").hidden = mineGroup !== "removed";
+        els("bulk-delete").disabled = !toRestore.length;
+        els("bulk-delete").textContent = toRestore.length ? `Delete ${toRestore.length} permanently` : "Delete permanently";
         els("bulk-all").hidden = els("bulk-none").hidden = mineGroup === "history";
         if (mineGroup === "history") els("bulk-count").textContent = "Sold and traded books are kept as history";
     }
@@ -538,6 +581,7 @@
     function hideConfirm() {
         els("bulk-row").hidden = false;
         els("bulk-confirm").hidden = true;
+        els("bulk-bar").classList.remove("is-danger");
     }
 
     async function bulkSetStatus(ids, status) {
@@ -558,11 +602,47 @@
         lastRendered.filter(isPickable).forEach(l => selected.add(l.inventory_id));
         filterBooks(); updateBar();
     });
+    let confirmAction = null;
     els("bulk-remove")?.addEventListener("click", () => {
         const n = pickedListings().filter(l => (l.status || "Available") === "Available").length;
         showConfirm(`Take ${n} book${n === 1 ? "" : "s"} off the shelves? Other readers won't see ${n === 1 ? "it" : "them"} anymore. You can put ${n === 1 ? "it" : "them"} back later.`);
         els("bulk-confirm-yes").textContent = `Yes, remove ${n}`;
+        els("bulk-bar").classList.remove("is-danger");
+        confirmAction = btn => runBulk("Removed", btn);
     });
+    els("bulk-delete")?.addEventListener("click", () => {
+        const n = pickedListings().filter(l => l.status === "Removed").length;
+        showConfirm(`Permanently delete ${n} book${n === 1 ? "" : "s"}? ${n === 1 ? "It" : "They"} will be erased for good — this can't be undone.`);
+        els("bulk-confirm-yes").textContent = `Yes, delete ${n} forever`;
+        els("bulk-bar").classList.add("is-danger");
+        confirmAction = btn => runBulkDelete(btn);
+    });
+
+    async function runBulkDelete(button) {
+        const ids = pickedListings().filter(l => l.status === "Removed").map(l => l.inventory_id);
+        if (!ids.length || button.disabled) return;
+        const label = button.textContent;
+        button.disabled = true;
+        button.textContent = "Deleting…";
+        try {
+            const { deleted, skipped } = await deleteListings(ids);
+            selected.clear();
+            hideConfirm();
+            filterBooks();
+            updateBar();
+            const n = deleted.length;
+            const history = skipped.filter(x => x.reason === "has_history").length;
+            let msg = n ? `${n} book${n === 1 ? "" : "s"} deleted permanently.` : "Nothing was deleted.";
+            if (history) msg += ` ${history} kept in Removed because ${history === 1 ? "it has" : "they have"} purchase or trade history.`;
+            toast(msg);
+        } catch (err) {
+            toast(err.message || "Nothing was deleted. Please try again.");
+        } finally {
+            button.disabled = false;
+            button.textContent = label;
+            updateBar();
+        }
+    }
     els("bulk-confirm-no")?.addEventListener("click", hideConfirm);
 
     async function runBulk(status, button) {
@@ -598,11 +678,38 @@
             updateBar();
         }
     }
-    els("bulk-confirm-yes")?.addEventListener("click", e => runBulk("Removed", e.currentTarget));
+    els("bulk-confirm-yes")?.addEventListener("click", e => { if (confirmAction) confirmAction(e.currentTarget); });
     els("bulk-restore")?.addEventListener("click", e => runBulk("Available", e.currentTarget));
     document.addEventListener("keydown", e => {
         if (e.key === "Escape" && selectMode && !dialog.open) setSelectMode(false);
     });
+
+    /* ---------- permanent delete ---------- */
+    function skipReason(skip) {
+        if (!skip) return "This listing couldn't be deleted.";
+        return {
+            has_history: "This book has purchase or trade history, so it can't be deleted — it will stay in Removed to keep everyone's records.",
+            not_removed: "Only books in Removed can be deleted. Remove it from the shelves first.",
+            not_yours: "You can only delete your own listings."
+        }[skip.reason] || "This listing couldn't be deleted.";
+    }
+    async function deleteListings(ids) {
+        const result = await apiRequest("user_books.php?action=bulk_delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids })
+        });
+        const deleted = (result && result.deleted_ids) || [];
+        // Drop deleted listings from the page's data, then redraw
+        deleted.forEach(id => {
+            delete inventoryMap[id];
+            selected.delete(id);
+            const at = bookListings.findIndex(l => Number(l.inventory_id) === Number(id));
+            if (at > -1) bookListings.splice(at, 1);
+        });
+        filterBooks();
+        return { deleted, skipped: (result && result.skipped) || [] };
+    }
 
     async function refreshShelf() {
         try { await loadBooks(); filterBooks(); } catch (_) {}

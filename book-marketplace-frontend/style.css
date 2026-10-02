@@ -93,7 +93,6 @@ header h1 {
     white-space: nowrap;
 }
 
-header > p { display: none; }
 
 nav {
     display: flex;
@@ -1556,3 +1555,45 @@ button.btn-danger-solid:hover { background: #9a4f45; }
 .dot-removed { background: var(--stamp); }
 .dot-history { background: var(--info); }
 @media (max-width: 600px) { .mine-tab { flex-basis: 100%; justify-content: flex-start; } }
+
+/* ---------- Permanent delete ---------- */
+.delete-confirm { border-color: #d99a90; background: #fbe3df; }
+.delete-confirm .inline-strong { display: inline; color: var(--stamp); }
+.bulk-bar.is-danger { background: #7a2f27; }
+.bulk-bar #bulk-delete { margin-left: 2px; }
+.bulk-bar.is-danger #bulk-confirm-yes { color: #7a2f27; background: #fffaf3; }
+.bulk-bar.is-danger #bulk-confirm-yes:hover { background: #fff; }
+
+/* ---------- Unlock request ---------- */
+button.text-link {
+    display: inline; padding: 0; margin: 0;
+    font: inherit; font-weight: 700; color: var(--spine-dark);
+    background: none; border: none; border-radius: 0;
+    text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+button.text-link:hover { background: none; color: var(--ink); }
+.lock-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 12px; }
+.lock-request-btn { padding: 8px 16px; font-size: 14px; background: var(--stamp); }
+.lock-request-btn:hover { background: #9a4f45; }
+.lock-actions .lock-retry-link { margin-top: 0; }
+
+.unlock-dialog {
+    width: min(460px, 92vw); padding: 0;
+    color: var(--ink); background: var(--surface);
+    border: 1px solid var(--rule-strong); border-radius: 20px;
+    box-shadow: 0 30px 60px -20px rgba(43,30,22,.55);
+}
+.unlock-dialog::backdrop { background: rgba(43,30,22,.55); backdrop-filter: blur(3px); }
+.unlock-dialog[open] { animation: dialog-in .25s ease; }
+.unlock-dialog form { position: relative; padding: 28px 28px 26px; }
+.unlock-dialog h2 { margin: 0 0 6px; font-family: var(--font-head); font-size: 26px; font-weight: 600; }
+.unlock-intro { margin: 0 0 4px; color: var(--muted); font-size: 14.5px; }
+.unlock-dialog textarea { min-height: 84px; }
+.unlock-actions { display: flex; gap: 10px; margin-top: 20px; }
+.unlock-done {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+    margin-top: 6px; padding: 16px 18px;
+    color: var(--ok); background: var(--ok-tint); border: 1px solid #cbd9c0; border-radius: 12px;
+}
+.unlock-done span { color: var(--ink-2); font-size: 14px; }
+.unlock-done button { margin-top: 6px; }

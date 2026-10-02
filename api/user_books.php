@@ -18,6 +18,68 @@ function ensure_removed_status(PDO $pdo): void
     }
 }
 
+/* ── PERMANENT DELETE ───────────────────────────────────────────────────
+   POST /api/user_books.php?action=bulk_delete   { "ids": [3, 7] }
+   (a customer's DELETE ?id=7 is handled the same way)
+   A listing is deleted for good only if it belongs to you, is already in
+   Removed, and has never been part of a purchase or trade — so nobody
+   else's transaction history is lost. Everything else is skipped. */
+function delete_listings(PDO $pdo, array $authUser, array $ids): void
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+    if (!$ids) Response::error('Choose at least one listing.', 422);
+    if (count($ids) > 200) Response::error('You can delete up to 200 listings at a time.', 422);
+
+    $params = [];
+    $marks = [];
+    foreach ($ids as $i => $id) { $marks[] = ":id{$i}"; $params["id{$i}"] = $id; }
+    $in = implode(',', $marks);
+
+    $sql = "SELECT ub.inventory_id, ub.seller_id, ub.status,
+                   (SELECT COUNT(*) FROM `TRANSACTIONS` t
+                     WHERE t.requested_inventory_id = ub.inventory_id
+                        OR t.offered_inventory_id   = ub.inventory_id) AS tx_count
+            FROM `USER_BOOKS` ub WHERE ub.inventory_id IN ({$in})";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+
+    $deletable = [];
+    $skipped = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $id = (int) $row['inventory_id'];
+        if ($authUser['role'] === 'Customer' && (int) $row['seller_id'] !== (int) $authUser['user_id']) {
+            $skipped[] = ['id' => $id, 'reason' => 'not_yours'];
+        } elseif ($row['status'] !== 'Removed') {
+            $skipped[] = ['id' => $id, 'reason' => 'not_removed'];
+        } elseif ((int) $row['tx_count'] > 0) {
+            $skipped[] = ['id' => $id, 'reason' => 'has_history'];
+        } else {
+            $deletable[] = $id;
+        }
+    }
+
+    if ($deletable) {
+        $dParams = [];
+        $dMarks = [];
+        foreach ($deletable as $i => $id) { $dMarks[] = ":d{$i}"; $dParams["d{$i}"] = $id; }
+        $pdo->beginTransaction();
+        try {
+            $del = $pdo->prepare('DELETE FROM `USER_BOOKS` WHERE inventory_id IN (' . implode(',', $dMarks) . ") AND status = 'Removed'");
+            $del->execute($dParams);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            Response::error('Could not delete the listings. Nothing was deleted.', 500);
+        }
+    }
+
+    Response::json([
+        'deleted'     => count($deletable),
+        'deleted_ids' => $deletable,
+        'skipped'     => $skipped,
+    ]);
+}
+
 /* One-time migration: add the cover_image column if this database lacks it */
 try {
     $pdo->query('SELECT `cover_image` FROM `USER_BOOKS` LIMIT 0');
@@ -26,6 +88,14 @@ try {
 }
 
 $method = $_SERVER['REQUEST_METHOD'];
+
+if ($method === 'DELETE') {
+    $authUser = require_authenticated_user($pdo);
+    if ($authUser['role'] === 'Customer') {
+        delete_listings($pdo, $authUser, [(int) ($_GET['id'] ?? 0)]);
+    }
+    // Staff/Admin fall through to the normal delete below
+}
 
 if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
     $authUser = require_authenticated_user($pdo);
@@ -80,6 +150,10 @@ if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
        Only listings you own (any listing for Staff/Admin) that are currently
        Available (to remove) or Removed (to put back) are changed; anything
        else is skipped and reported back. */
+    if ($method === 'POST' && ($_GET['action'] ?? '') === 'bulk_delete') {
+        delete_listings($pdo, $authUser, (array) ($payload['ids'] ?? []));
+    }
+
     if ($method === 'POST' && ($_GET['action'] ?? '') === 'bulk_status') {
         $to = (string) ($payload['status'] ?? '');
         if (!in_array($to, ['Removed', 'Available'], true)) {

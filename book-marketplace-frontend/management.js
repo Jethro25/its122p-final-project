@@ -305,6 +305,7 @@ function renderUsersTable() {
                 <td>
                     <div class="management-actions">
                         ${user.status === "Locked" && managementState.role === "admin" ? `<button class="management-btn success small" onclick="unlockUser(${user.user_id})">Unlock</button>` : ""}
+                        ${user.status === "Locked" && (managementState.reports || []).some(r => Number(r.submitted_by_id) === Number(user.user_id) && ["Pending","Under_Review"].includes(r.status) && parseFormData(r.form_data)?.type === "unlock_request") ? `<span class="management-badge warning">Requested unlock</span>` : ""}
                         <button class="management-btn primary small" onclick="saveUser(${user.user_id})">Save</button>
                         ${canDelete ? `<button class="management-btn danger small" onclick="deleteUser(${user.user_id})">Delete</button>` : ""}
                     </div>
@@ -349,9 +350,30 @@ async function unlockUser(userId) {
             headers: {"Content-Type":"application/json"},
             body: JSON.stringify({ status: "Active" })
         });
-        showMgmtAlert("Account unlocked. The user can sign in again.", "success");
+        // Close any open unlock requests from this user
+        const openRequests = (managementState.reports || []).filter(r =>
+            Number(r.submitted_by_id) === Number(userId) &&
+            ["Pending","Under_Review"].includes(r.status) &&
+            parseFormData(r.form_data)?.type === "unlock_request");
+        for (const r of openRequests) {
+            await mgApi(`reports.php?id=${r.report_id}`, {
+                method: "PUT",
+                headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({
+                    status: "Resolved",
+                    resolution_notes: "Account unlocked by an administrator.",
+                    reviewed_by_id: managementState.user.user_id,
+                    resolved_at: new Date().toISOString().slice(0,19).replace("T"," ")
+                })
+            });
+        }
+        showMgmtAlert(openRequests.length
+            ? "Account unlocked and the unlock request marked as resolved."
+            : "Account unlocked. The user can sign in again.", "success");
         await loadAllUsers();
+        if (openRequests.length) await loadReports();
         renderUsersTable();
+        if (typeof renderReportsTable === "function") renderReportsTable();
         renderDashboardStats();
     } catch (error) {
         showMgmtAlert(error.message, "error");
@@ -661,13 +683,24 @@ function renderReportsTable() {
 
     tbody.innerHTML = reports.map(r => {
         const data = parseFormData(r.form_data);
+        const isUnlock = data && data.type === "unlock_request";
+        const requester = um[r.submitted_by_id];
+        const stillLocked = requester && requester.status === "Locked";
+        const detailsCell = isUnlock
+            ? `<div class="unlock-request-cell"><span class="management-badge danger">Unlock request</span>
+                 <div>${data.message ? `&ldquo;${mgEscape(data.message)}&rdquo;` : "<span class='muted'>No message</span>"}</div>
+                 <div class="muted">Account is ${requester ? mgEscape(requester.status) : "unknown"}</div></div>`
+            : `<span class="management-code">${mgEscape(JSON.stringify(data))}</span>`;
+        const unlockBtn = isUnlock && stillLocked && managementState.role === "admin"
+            ? `<button class="management-btn success small" onclick="unlockUser(${r.submitted_by_id})">Unlock account</button>`
+            : "";
         return `
         <tr>
             <td>${r.report_id}</td>
             <td>${mgEscape(um[r.submitted_by_id]?.username || `User #${r.submitted_by_id}`)}</td>
             <td>${mgEscape(r.report_category.replaceAll("_"," "))}</td>
             <td>${mgEscape(r.related_entity_type)}</td>
-            <td class="management-code">${mgEscape(JSON.stringify(data))}</td>
+            <td>${detailsCell}</td>
             <td>${formatDate(r.submitted_at)}</td>
             <td>
                 <select id="report-status-${r.report_id}">
@@ -678,7 +711,10 @@ function renderReportsTable() {
                 <textarea id="report-notes-${r.report_id}" placeholder="Resolution/review notes">${mgEscape(r.resolution_notes || "")}</textarea>
             </td>
             <td>
-                <button class="management-btn primary small" onclick="saveReport(${r.report_id})">Save</button>
+                <div class="management-actions">
+                    ${unlockBtn}
+                    <button class="management-btn primary small" onclick="saveReport(${r.report_id})">Save</button>
+                </div>
             </td>
         </tr>`;
     }).join("") || `<tr><td colspan="9" class="management-empty">No reports/forms found.</td></tr>`;
