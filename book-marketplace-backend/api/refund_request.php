@@ -14,6 +14,7 @@ $crud = new Crud(
     enums: [
         'status' => ['Pending', 'Approved', 'Rejected'],
     ],
+    softDeleteColumn: 'deleted_at',
 );
 
 dispatch_crud_request($crud, 'refund_id');

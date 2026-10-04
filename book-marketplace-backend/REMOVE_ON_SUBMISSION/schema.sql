@@ -55,6 +55,7 @@ CREATE TABLE `BOOKS_CATALOG` (
   `title` VARCHAR(255) NOT NULL,
   `author` VARCHAR(255) NOT NULL,
   `isbn` VARCHAR(20) NOT NULL,
+  `deleted_at` DATETIME NULL DEFAULT NULL,
   PRIMARY KEY (`book_id`),
   CONSTRAINT `fk_books_catalog_category_id` FOREIGN KEY (`category_id`) REFERENCES `BOOK_CATEGORIES`(`category_id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_books_catalog_managed_by_admin_id` FOREIGN KEY (`managed_by_admin_id`) REFERENCES `USER`(`user_id`) ON DELETE RESTRICT
@@ -161,6 +162,7 @@ CREATE TABLE `REFUND_REQUEST` (
   `reason` TEXT NOT NULL,
   `status` ENUM('Pending','Approved','Rejected') NOT NULL DEFAULT 'Pending',
   `requested_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL DEFAULT NULL,
   PRIMARY KEY (`refund_id`),
   CONSTRAINT `fk_refund_request_transaction_id` FOREIGN KEY (`transaction_id`) REFERENCES `TRANSACTIONS`(`transaction_id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_refund_request_customer_id` FOREIGN KEY (`customer_id`) REFERENCES `USER`(`user_id`) ON DELETE RESTRICT,
@@ -189,6 +191,7 @@ CREATE TABLE `REPORTS` (
   `resolution_notes` TEXT DEFAULT NULL,
   `submitted_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `resolved_at` TIMESTAMP NULL DEFAULT NULL,
+  `deleted_at` DATETIME NULL DEFAULT NULL,
   PRIMARY KEY (`report_id`),
   CONSTRAINT `fk_reports_submitted_by_id` FOREIGN KEY (`submitted_by_id`) REFERENCES `USER`(`user_id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_reports_reviewed_by_id` FOREIGN KEY (`reviewed_by_id`) REFERENCES `USER`(`user_id`) ON DELETE SET NULL
@@ -226,3 +229,17 @@ INSERT INTO `SYSTEM_RECORDS` (`record_id`, `admin_id`, `record_type`, `details`,
   (8, 2, 'Audit_Log', '{"action":"approved_refund","refund_id":1}', '2024-04-12 09:05:00'),
   (9, 1, 'Financial_Transaction_Record', '{"transaction_id":10,"amount":15.50}', '2024-04-20 17:05:00'),
   (10, 2, 'Audit_Log', '{"action":"rejected_report","report_id":4}', '2024-04-06 12:05:00');
+
+-- ============================================================
+-- MIGRATION: soft-delete columns + password + Locked status
+-- Run this once against an existing database.
+-- ============================================================
+ALTER TABLE `BOOKS_CATALOG`
+    ADD COLUMN IF NOT EXISTS `deleted_at` DATETIME NULL DEFAULT NULL;
+ALTER TABLE `REPORTS`
+    ADD COLUMN IF NOT EXISTS `deleted_at` DATETIME NULL DEFAULT NULL;
+ALTER TABLE `REFUND_REQUEST`
+    ADD COLUMN IF NOT EXISTS `deleted_at` DATETIME NULL DEFAULT NULL;
+ALTER TABLE `USER` MODIFY `status`
+    ENUM('Active','Suspended','Banned','Pending Verification','Locked')
+    NOT NULL DEFAULT 'Pending Verification';

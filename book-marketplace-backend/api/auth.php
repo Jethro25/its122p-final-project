@@ -159,7 +159,18 @@ try {
 
         if (!preg_match('/^[a-zA-Z0-9_]{3,50}$/', $username)) Response::error('Username must be 3-50 characters and contain only letters, numbers, and underscores.', 422);
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) Response::error('Please provide a valid email address.', 422);
-        if (strlen($password) < 6) Response::error('Password must be at least 6 characters long.', 422);
+
+        /* ── Password strength ───────────────────────────────────────────────
+           Min 8 chars; needs uppercase, lowercase, digit, special character. */
+        $pwErrors = [];
+        if (strlen($password) < 8)                     $pwErrors[] = 'at least 8 characters';
+        if (!preg_match('/[A-Z]/', $password))          $pwErrors[] = 'an uppercase letter (A–Z)';
+        if (!preg_match('/[a-z]/', $password))          $pwErrors[] = 'a lowercase letter (a–z)';
+        if (!preg_match('/[0-9]/', $password))          $pwErrors[] = 'a number (0–9)';
+        if (!preg_match('/[^A-Za-z0-9]/', $password))  $pwErrors[] = 'a special character (e.g. @, #, !, %)';
+        if ($pwErrors) {
+            Response::error('Password is too weak. It must include: ' . implode(', ', $pwErrors) . '.', 422);
+        }
 
         $check = $pdo->prepare('SELECT user_id FROM `USER` WHERE username = :username OR LOWER(email) = LOWER(:email) LIMIT 1');
         $check->execute(['username' => $username, 'email' => $email]);

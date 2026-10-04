@@ -17,6 +17,7 @@ $crud = new Crud(
     primaryKey: 'book_id',
     insertable: ['category_id', 'managed_by_admin_id', 'title', 'author', 'isbn'],
     required: ['category_id', 'managed_by_admin_id', 'title', 'author', 'isbn'],
+    softDeleteColumn: 'deleted_at',
 );
 
 

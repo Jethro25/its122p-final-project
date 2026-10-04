@@ -501,7 +501,7 @@ function renderBooksTable() {
             <td>
                 <div class="management-actions">
                     <button class="management-btn primary small" onclick="editBook(${book.book_id})">Edit</button>
-                    <button class="management-btn danger small" onclick="deleteBook(${book.book_id})">Delete</button>
+                    <button class="management-btn danger small" onclick="deleteBook(${book.book_id})" title="Soft-delete: hides from catalog but keeps the record">Archive</button>
                 </div>
             </td>
         </tr>
@@ -845,7 +845,7 @@ function renderRecordsTable() {
             <td>${mgEscape(r.record_type.replaceAll("_"," "))}</td>
             <td class="management-code">${mgEscape(typeof r.details === "string" ? r.details : JSON.stringify(r.details || {}))}</td>
             <td>${formatDate(r.created_at)}</td>
-            <td><button class="management-btn danger small" onclick="deleteRecord(${r.record_id})">Delete</button></td>
+            <td><button class="management-btn danger small" onclick="deleteRecord(${r.record_id})" title="Soft-delete: hides from view but keeps the audit record">Archive</button></td>
         </tr>
     `).join("") || `<tr><td colspan="6" class="management-empty">No system records found.</td></tr>`;
 }

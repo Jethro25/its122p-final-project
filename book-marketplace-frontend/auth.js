@@ -443,7 +443,14 @@ async function handleRegister(event) {
     if (!username || !email || !password || !confirmPassword) return showMessage("Please fill in all registration fields.", "error");
     if (!/^[a-zA-Z0-9_]{3,50}$/.test(username)) return showMessage("Username must be 3-50 characters and contain only letters, numbers, and underscores.", "error");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showMessage("Please provide a valid email address.", "error");
-    if (password.length < 6) return showMessage("Password must be at least 6 characters long.", "error");
+    /* ── Client-side password strength (mirrors server rules exactly) ── */
+    const pwErrors = [];
+    if (password.length < 8)                       pwErrors.push("at least 8 characters");
+    if (!/[A-Z]/.test(password))                   pwErrors.push("an uppercase letter (A–Z)");
+    if (!/[a-z]/.test(password))                   pwErrors.push("a lowercase letter (a–z)");
+    if (!/[0-9]/.test(password))                   pwErrors.push("a number (0–9)");
+    if (!/[^A-Za-z0-9]/.test(password))            pwErrors.push("a special character (e.g. @, #, !, %)");
+    if (pwErrors.length) return showMessage("Password is too weak. It must include: " + pwErrors.join(", ") + ".", "error");
     if (password !== confirmPassword) return showMessage("Passwords do not match.", "error");
 
     if (submitBtn) { submitBtn.disabled = true; submitBtn.querySelector("span").textContent = "Creating Account..."; }
@@ -521,3 +528,58 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (password) password.value = button.dataset.pass || "password";
     }));
 });
+
+/* ==========================================================================
+   PASSWORD STRENGTH METER (register page)
+   ========================================================================== */
+(function () {
+    const pw = document.getElementById("register-password");
+    if (!pw) return;
+
+    const fill = document.getElementById("pw-strength-fill");
+    const reqEls = {
+        length: document.getElementById("req-length"),
+        upper:  document.getElementById("req-upper"),
+        lower:  document.getElementById("req-lower"),
+        digit:  document.getElementById("req-digit"),
+        symbol: document.getElementById("req-symbol"),
+    };
+
+    function score(v) {
+        const rules = {
+            length: v.length >= 8,
+            upper:  /[A-Z]/.test(v),
+            lower:  /[a-z]/.test(v),
+            digit:  /[0-9]/.test(v),
+            symbol: /[^A-Za-z0-9]/.test(v),
+        };
+        let passed = 0;
+        for (const [key, ok] of Object.entries(rules)) {
+            const el = reqEls[key];
+            if (!el) continue;
+            el.classList.toggle("req-met", ok);
+            el.textContent = (ok ? "✓ " : "○ ") + el.textContent.replace(/^[✓○] /, "");
+            if (ok) passed++;
+        }
+        return passed;
+    }
+
+    const LEVELS = [
+        { label: "Very weak", color: "#ef4444", pct: "20%" },
+        { label: "Weak",      color: "#f97316", pct: "40%" },
+        { label: "Fair",      color: "#eab308", pct: "60%" },
+        { label: "Strong",    color: "#22c55e", pct: "80%" },
+        { label: "Very strong", color: "#16a34a", pct: "100%" },
+    ];
+
+    pw.addEventListener("input", () => {
+        const v = pw.value;
+        if (!fill) return;
+        if (!v) { fill.style.width = "0"; fill.style.background = ""; return; }
+        const passed = score(v);
+        const lvl = LEVELS[Math.max(0, passed - 1)];
+        fill.style.width = lvl.pct;
+        fill.style.background = lvl.color;
+        fill.setAttribute("aria-label", lvl.label);
+    });
+})();

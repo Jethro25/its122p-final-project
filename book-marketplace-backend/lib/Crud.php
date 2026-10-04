@@ -20,6 +20,8 @@ class Crud
     private array $enums;
     /** @var string[] columns that must be present (and non-null) on create */
     private array $required;
+    /** @var string|null column used for soft-delete (e.g. 'deleted_at'); null = hard delete */
+    private ?string $softDeleteColumn;
 
     public function __construct(
         PDO $pdo,
@@ -28,7 +30,8 @@ class Crud
         array $insertable,
         array $required = [],
         array $enums = [],
-        ?array $updatable = null
+        ?array $updatable = null,
+        ?string $softDeleteColumn = null
     ) {
         $this->pdo = $pdo;
         $this->table = $table;
@@ -37,6 +40,7 @@ class Crud
         $this->updatable = $updatable ?? $insertable;
         $this->enums = $enums;
         $this->required = $required;
+        $this->softDeleteColumn = $softDeleteColumn;
     }
 
     /**
@@ -56,6 +60,11 @@ class Crud
             }
         }
 
+        /* Exclude soft-deleted rows */
+        if ($this->softDeleteColumn) {
+            $where[] = "`{$this->softDeleteColumn}` IS NULL";
+        }
+
         $sql = "SELECT * FROM `{$this->table}`";
         if ($where) {
             $sql .= ' WHERE ' . implode(' AND ', $where);
@@ -72,11 +81,12 @@ class Crud
         return $stmt->fetchAll();
     }
 
-    /** GET /api/<resource>?id=5 */
+    /** GET /api/<resource>?id=5 — returns null for soft-deleted rows */
     public function show($id): ?array
     {
+        $sdCond = $this->softDeleteColumn ? " AND `{$this->softDeleteColumn}` IS NULL" : '';
         $stmt = $this->pdo->prepare(
-            "SELECT * FROM `{$this->table}` WHERE `{$this->primaryKey}` = :id LIMIT 1"
+            "SELECT * FROM `{$this->table}` WHERE `{$this->primaryKey}` = :id{$sdCond} LIMIT 1"
         );
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch();
@@ -149,17 +159,40 @@ class Crud
         return $this->show($id);
     }
 
-    /** DELETE /api/<resource>?id=5 */
+    /** DELETE /api/<resource>?id=5
+     *  If a softDeleteColumn is set, sets that column to NOW() instead of
+     *  removing the row. The row is hidden from index() and show() but stays
+     *  in the database for audit purposes. */
     public function delete($id): bool
     {
-        if (!$this->show($id)) {
+        $row = $this->showIncludingDeleted($id);
+        if (!$row) {
             return false;
+        }
+        if ($this->softDeleteColumn) {
+            $col = $this->softDeleteColumn;
+            $stmt = $this->pdo->prepare(
+                "UPDATE `{$this->table}` SET `{$col}` = NOW() WHERE `{$this->primaryKey}` = :id AND `{$col}` IS NULL"
+            );
+            $stmt->execute(['id' => $id]);
+            return $stmt->rowCount() > 0;
         }
         $stmt = $this->pdo->prepare(
             "DELETE FROM `{$this->table}` WHERE `{$this->primaryKey}` = :id"
         );
         $stmt->execute(['id' => $id]);
         return true;
+    }
+
+    /** Like show() but also returns soft-deleted rows (used internally). */
+    public function showIncludingDeleted($id): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT * FROM `{$this->table}` WHERE `{$this->primaryKey}` = :id LIMIT 1"
+        );
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch();
+        return $row ?: null;
     }
 
     /**
