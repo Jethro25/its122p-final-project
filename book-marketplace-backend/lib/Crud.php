@@ -20,8 +20,8 @@ class Crud
     private array $enums;
     /** @var string[] columns that must be present (and non-null) on create */
     private array $required;
-    /** @var string|null column used for soft-delete (e.g. 'deleted_at'); null = hard delete */
-    private ?string $softDeleteColumn;
+    /** @var string column stamped on delete — rows are never removed from the database */
+    private string $softDeleteColumn;
 
     public function __construct(
         PDO $pdo,
@@ -31,7 +31,7 @@ class Crud
         array $required = [],
         array $enums = [],
         ?array $updatable = null,
-        ?string $softDeleteColumn = null
+        string $softDeleteColumn = 'deleted_at'
     ) {
         $this->pdo = $pdo;
         $this->table = $table;
@@ -41,6 +41,8 @@ class Crud
         $this->enums = $enums;
         $this->required = $required;
         $this->softDeleteColumn = $softDeleteColumn;
+        // Make sure the soft-delete column exists (older databases lack it)
+        ensure_column($pdo, $table, $softDeleteColumn);
     }
 
     /**
@@ -61,9 +63,7 @@ class Crud
         }
 
         /* Exclude soft-deleted rows */
-        if ($this->softDeleteColumn) {
-            $where[] = "`{$this->softDeleteColumn}` IS NULL";
-        }
+        $where[] = "`{$this->softDeleteColumn}` IS NULL";
 
         $sql = "SELECT * FROM `{$this->table}`";
         if ($where) {
@@ -84,7 +84,7 @@ class Crud
     /** GET /api/<resource>?id=5 — returns null for soft-deleted rows */
     public function show($id): ?array
     {
-        $sdCond = $this->softDeleteColumn ? " AND `{$this->softDeleteColumn}` IS NULL" : '';
+        $sdCond = " AND `{$this->softDeleteColumn}` IS NULL";
         $stmt = $this->pdo->prepare(
             "SELECT * FROM `{$this->table}` WHERE `{$this->primaryKey}` = :id{$sdCond} LIMIT 1"
         );
@@ -169,19 +169,13 @@ class Crud
         if (!$row) {
             return false;
         }
-        if ($this->softDeleteColumn) {
-            $col = $this->softDeleteColumn;
-            $stmt = $this->pdo->prepare(
-                "UPDATE `{$this->table}` SET `{$col}` = NOW() WHERE `{$this->primaryKey}` = :id AND `{$col}` IS NULL"
-            );
-            $stmt->execute(['id' => $id]);
-            return $stmt->rowCount() > 0;
-        }
+        // Soft delete only: stamp the date, keep the row for logging
+        $col = $this->softDeleteColumn;
         $stmt = $this->pdo->prepare(
-            "DELETE FROM `{$this->table}` WHERE `{$this->primaryKey}` = :id"
+            "UPDATE `{$this->table}` SET `{$col}` = NOW() WHERE `{$this->primaryKey}` = :id AND `{$col}` IS NULL"
         );
         $stmt->execute(['id' => $id]);
-        return true;
+        return $stmt->rowCount() > 0;
     }
 
     /** Like show() but also returns soft-deleted rows (used internally). */

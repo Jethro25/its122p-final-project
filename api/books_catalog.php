@@ -17,6 +17,7 @@ $crud = new Crud(
     primaryKey: 'book_id',
     insertable: ['category_id', 'managed_by_admin_id', 'title', 'author', 'isbn'],
     required: ['category_id', 'managed_by_admin_id', 'title', 'author', 'isbn'],
+    softDeleteColumn: 'deleted_at',
 );
 
 
@@ -52,7 +53,7 @@ function fetch_category_ids(PDO $pdo, array $bookIds): array
 
     $placeholders = implode(', ', array_fill(0, count($bookIds), '?'));
     $stmt = $pdo->prepare(
-        "SELECT `book_id`, `category_id` FROM `BOOK_CATEGORY_MAP` WHERE `book_id` IN ({$placeholders}) ORDER BY `category_id` ASC"
+        "SELECT `book_id`, `category_id` FROM `BOOK_CATEGORY_MAP` WHERE `book_id` IN ({$placeholders}) AND `deleted_at` IS NULL ORDER BY `category_id` ASC"
     );
     $stmt->execute($bookIds);
 
@@ -63,18 +64,31 @@ function fetch_category_ids(PDO $pdo, array $bookIds): array
     return $map;
 }
 
+ensure_column($pdo, 'BOOK_CATEGORY_MAP', 'deleted_at');
+
 /** Replaces the BOOK_CATEGORY_MAP rows for one book with $categoryIds. */
 function save_category_map(PDO $pdo, int $bookId, array $categoryIds): void
 {
-    $pdo->prepare('DELETE FROM `BOOK_CATEGORY_MAP` WHERE `book_id` = :book_id')
-        ->execute(['book_id' => $bookId]);
+    // Soft-remove links that are no longer chosen (kept for logging)
+    $categoryIds = array_values(array_unique(array_map('intval', $categoryIds)));
+    $params = ['book_id' => $bookId];
+    $keep = '';
+    if ($categoryIds) {
+        $marks = [];
+        foreach ($categoryIds as $i => $cid) { $marks[] = ":c{$i}"; $params["c{$i}"] = $cid; }
+        $keep = ' AND `category_id` NOT IN (' . implode(',', $marks) . ')';
+    }
+    $pdo->prepare("UPDATE `BOOK_CATEGORY_MAP` SET `deleted_at` = NOW() WHERE `book_id` = :book_id AND `deleted_at` IS NULL{$keep}")
+        ->execute($params);
 
     if (!$categoryIds) {
         return;
     }
 
+    // Add new links, or bring back ones that were soft-removed earlier
     $stmt = $pdo->prepare(
-        'INSERT INTO `BOOK_CATEGORY_MAP` (`book_id`, `category_id`) VALUES (:book_id, :category_id)'
+        'INSERT INTO `BOOK_CATEGORY_MAP` (`book_id`, `category_id`) VALUES (:book_id, :category_id)
+         ON DUPLICATE KEY UPDATE `deleted_at` = NULL'
     );
     foreach ($categoryIds as $categoryId) {
         $stmt->execute(['book_id' => $bookId, 'category_id' => $categoryId]);
@@ -178,7 +192,7 @@ try {
             if ($id === null) {
                 Response::error("Query parameter 'book_id' (as ?id=) is required for deletes.", 400);
             }
-            /* BOOK_CATEGORY_MAP rows are removed automatically via ON DELETE CASCADE */
+            /* Soft delete: the book row and its category links stay in the database */
             $ok = $crud->delete($id);
             if (!$ok) {
                 Response::error("Record with book_id = {$id} not found.", 404);

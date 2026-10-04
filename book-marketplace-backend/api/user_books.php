@@ -39,7 +39,7 @@ function delete_listings(PDO $pdo, array $authUser, array $ids): void
                    (SELECT COUNT(*) FROM `TRANSACTIONS` t
                      WHERE t.requested_inventory_id = ub.inventory_id
                         OR t.offered_inventory_id   = ub.inventory_id) AS tx_count
-            FROM `USER_BOOKS` ub WHERE ub.inventory_id IN ({$in})";
+            FROM `USER_BOOKS` ub WHERE ub.inventory_id IN ({$in}) AND ub.deleted_at IS NULL";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
 
@@ -64,7 +64,11 @@ function delete_listings(PDO $pdo, array $authUser, array $ids): void
         foreach ($deletable as $i => $id) { $dMarks[] = ":d{$i}"; $dParams["d{$i}"] = $id; }
         $pdo->beginTransaction();
         try {
-            $del = $pdo->prepare('DELETE FROM `USER_BOOKS` WHERE inventory_id IN (' . implode(',', $dMarks) . ") AND status = 'Removed'");
+            // Soft delete: the row stays in the database for logging and is
+            // hidden from the app. deleted_by records who deleted it.
+            $dParams['by'] = (int) $authUser['user_id'];
+            $del = $pdo->prepare('UPDATE `USER_BOOKS` SET deleted_at = NOW(), deleted_by = :by
+                                  WHERE inventory_id IN (' . implode(',', $dMarks) . ") AND status = 'Removed' AND deleted_at IS NULL");
             $del->execute($dParams);
             $pdo->commit();
         } catch (Throwable $e) {
@@ -78,6 +82,15 @@ function delete_listings(PDO $pdo, array $authUser, array $ids): void
         'deleted_ids' => $deletable,
         'skipped'     => $skipped,
     ]);
+}
+
+/* One-time migration: soft-delete logging columns */
+try {
+    $pdo->query('SELECT `deleted_at`, `deleted_by` FROM `USER_BOOKS` LIMIT 0');
+} catch (PDOException $e) {
+    $cols = $pdo->query("SHOW COLUMNS FROM `USER_BOOKS`")->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('deleted_at', $cols, true)) $pdo->exec('ALTER TABLE `USER_BOOKS` ADD COLUMN `deleted_at` DATETIME NULL DEFAULT NULL');
+    if (!in_array('deleted_by', $cols, true)) $pdo->exec('ALTER TABLE `USER_BOOKS` ADD COLUMN `deleted_by` INT UNSIGNED NULL DEFAULT NULL');
 }
 
 /* One-time migration: add the cover_image column if this database lacks it */
@@ -178,7 +191,7 @@ if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
         }
 
         // Which of the requested listings can actually change?
-        $find = $pdo->prepare("SELECT inventory_id FROM `USER_BOOKS` WHERE inventory_id IN ({$in}) AND status = :from{$ownerSql}");
+        $find = $pdo->prepare("SELECT inventory_id FROM `USER_BOOKS` WHERE inventory_id IN ({$in}) AND status = :from AND deleted_at IS NULL{$ownerSql}");
         $findParams = $params; unset($findParams['to']);
         $find->execute($findParams);
         $changeable = array_map('intval', $find->fetchAll(PDO::FETCH_COLUMN));
@@ -186,7 +199,7 @@ if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
         if ($changeable) {
             $pdo->beginTransaction();
             try {
-                $upd = $pdo->prepare("UPDATE `USER_BOOKS` SET status = :to WHERE inventory_id IN ({$in}) AND status = :from{$ownerSql}");
+                $upd = $pdo->prepare("UPDATE `USER_BOOKS` SET status = :to WHERE inventory_id IN ({$in}) AND status = :from AND deleted_at IS NULL{$ownerSql}");
                 $upd->execute($params);
                 $pdo->commit();
             } catch (Throwable $e) {
@@ -215,6 +228,7 @@ $crud = new Crud(
         'condition'    => ['New', 'Good', 'Acceptable'],
         'status'       => ['Available', 'In_transaction', 'Sold', 'Traded', 'Removed'],
     ],
+    softDeleteColumn: 'deleted_at',   // deleted listings stay in the DB but are hidden from the app
 );
 
 dispatch_crud_request($crud, 'inventory_id');

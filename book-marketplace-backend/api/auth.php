@@ -29,6 +29,7 @@ function public_user(array $user): array
     ];
 }
 
+ensure_column($pdo, 'USER', 'deleted_at');
 $action = strtolower((string) ($_GET['action'] ?? ''));
 
 try {
@@ -46,7 +47,7 @@ try {
         $stmt = $pdo->prepare(
             'SELECT user_id, username, email, password_hash, role, status, permission
              FROM `USER`
-             WHERE username = :username_identifier OR LOWER(email) = LOWER(:email_identifier)
+             WHERE deleted_at IS NULL AND (username = :username_identifier OR LOWER(email) = LOWER(:email_identifier))
              LIMIT 1'
         );
         $stmt->execute([
@@ -70,6 +71,7 @@ try {
                 INDEX `idx_la_user` (`user_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
         );
+        ensure_column($pdo, 'LOGIN_ATTEMPTS', 'cleared_at');
         $lockedResponse = function (string $username) use ($maxAttempts): void {
             Response::json([
                 'error'        => 'Your account is locked because of too many incorrect password attempts. Please contact an administrator to unlock it.',
@@ -107,7 +109,7 @@ try {
             $uid = (int) $user['user_id'];
             $pdo->prepare('INSERT INTO `LOGIN_ATTEMPTS` (user_id, attempted_at) VALUES (:uid, UTC_TIMESTAMP())')
                 ->execute(['uid' => $uid]);
-            $countStmt = $pdo->prepare('SELECT COUNT(*) FROM `LOGIN_ATTEMPTS` WHERE user_id = :uid');
+            $countStmt = $pdo->prepare('SELECT COUNT(*) FROM `LOGIN_ATTEMPTS` WHERE user_id = :uid AND cleared_at IS NULL');
             $countStmt->execute(['uid' => $uid]);
             $failed = (int) $countStmt->fetchColumn();
 
@@ -121,7 +123,7 @@ try {
                     $lock->execute(['uid' => $uid]);
                 }
                 // Reset the counter so the user starts fresh once an Admin unlocks them.
-                $pdo->prepare('DELETE FROM `LOGIN_ATTEMPTS` WHERE user_id = :uid')->execute(['uid' => $uid]);
+                $pdo->prepare('UPDATE `LOGIN_ATTEMPTS` SET cleared_at = UTC_TIMESTAMP() WHERE user_id = :uid AND cleared_at IS NULL')->execute(['uid' => $uid]);
                 $lockedResponse((string) $user['username']);
             }
 
@@ -140,7 +142,7 @@ try {
         if ($user['status'] !== 'Active') Response::error('This account is not active and cannot sign in.', 403);
 
         // Successful sign-in clears the failed-attempt counter.
-        $pdo->prepare('DELETE FROM `LOGIN_ATTEMPTS` WHERE user_id = :uid')->execute(['uid' => (int) $user['user_id']]);
+        $pdo->prepare('UPDATE `LOGIN_ATTEMPTS` SET cleared_at = UTC_TIMESTAMP() WHERE user_id = :uid AND cleared_at IS NULL')->execute(['uid' => (int) $user['user_id']]);
 
         $token = issue_auth_token($user);
         Response::json([

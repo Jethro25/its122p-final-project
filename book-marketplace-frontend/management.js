@@ -307,7 +307,7 @@ function renderUsersTable() {
                         ${user.status === "Locked" && managementState.role === "admin" ? `<button class="management-btn success small" onclick="unlockUser(${user.user_id})">Unlock</button>` : ""}
                         ${user.status === "Locked" && (managementState.reports || []).some(r => Number(r.submitted_by_id) === Number(user.user_id) && ["Pending","Under_Review"].includes(r.status) && parseFormData(r.form_data)?.type === "unlock_request") ? `<span class="management-badge warning">Requested unlock</span>` : ""}
                         <button class="management-btn primary small" onclick="saveUser(${user.user_id})">Save</button>
-                        ${canDelete ? `<button class="management-btn danger small" onclick="deleteUser(${user.user_id})">Delete</button>` : ""}
+                        ${canDelete ? `<button class="management-btn danger small" onclick="deleteUser(${user.user_id})">Archive</button>` : ""}
                     </div>
                 </td>
             </tr>
@@ -381,11 +381,11 @@ async function unlockUser(userId) {
 }
 
 async function deleteUser(userId) {
-    if (!confirm(`Remove user #${userId} from the platform?`)) return;
+    if (!confirm(`Archive user #${userId}? They will no longer be able to sign in. It will be hidden from the app, but the record is kept in the database for logging.`)) return;
 
     try {
         await mgApi(`user.php?id=${userId}`, {method:"DELETE"});
-        showMgmtAlert("User removed.", "success");
+        showMgmtAlert("User archived. The record is kept for logging.", "success");
         await loadAllUsers();
         renderUsersTable();
         renderDashboardStats();
@@ -509,10 +509,10 @@ function renderBooksTable() {
 }
 
 async function deleteBook(bookId) {
-    if (!confirm(`Delete catalog book #${bookId}?`)) return;
+    if (!confirm(`Archive catalog book #${bookId}? It will be hidden from the app, but the record is kept in the database for logging.`)) return;
     try {
         await mgApi(`books_catalog.php?id=${bookId}`, {method:"DELETE"});
-        showMgmtAlert("Catalog book deleted.", "success");
+        showMgmtAlert("Catalog book archived. The record is kept for logging.", "success");
         await loadBooks();
         await loadListings();
         renderBooksTable();
@@ -594,7 +594,7 @@ function renderCategoriesTable() {
             <td>
                 <div class="management-actions">
                     <button class="management-btn primary small" onclick="editCategory(${c.category_id})">Edit</button>
-                    <button class="management-btn danger small" onclick="deleteCategory(${c.category_id})">Delete</button>
+                    <button class="management-btn danger small" onclick="deleteCategory(${c.category_id})">Archive</button>
                 </div>
             </td>
         </tr>
@@ -602,10 +602,10 @@ function renderCategoriesTable() {
 }
 
 async function deleteCategory(categoryId) {
-    if (!confirm(`Delete category #${categoryId}?`)) return;
+    if (!confirm(`Archive category #${categoryId}? It will be hidden from the app, but the record is kept in the database for logging.`)) return;
     try {
         await mgApi(`book_categories.php?id=${categoryId}`, {method:"DELETE"});
-        showMgmtAlert("Category deleted.", "success");
+        showMgmtAlert("Category archived. The record is kept for logging.", "success");
         await loadCategories();
         await loadBooks();
         renderCategoriesTable();
@@ -872,10 +872,10 @@ async function submitRecordForm(event) {
 }
 
 async function deleteRecord(recordId) {
-    if (!confirm(`Delete system record #${recordId}?`)) return;
+    if (!confirm(`Archive system record #${recordId}? It will be hidden from the app, but the record is kept in the database for logging.`)) return;
     try {
         await mgApi(`system_records.php?id=${recordId}`, {method:"DELETE"});
-        showMgmtAlert("System record deleted.", "success");
+        showMgmtAlert("System record archived. The record is kept for logging.", "success");
         await loadRecords();
         renderRecordsTable();
     } catch (error) {

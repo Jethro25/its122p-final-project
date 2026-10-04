@@ -22,6 +22,7 @@ $crud = new Crud(
         'related_entity_type' => ['User', 'Book_Listing', 'Transaction', 'None'],
         'status' => ['Pending', 'Under_Review', 'Approved', 'Rejected', 'Resolved', 'Dismissed'],
     ],
+    softDeleteColumn: 'deleted_at',
 );
 
 dispatch_crud_request($crud, 'report_id');

@@ -310,9 +310,9 @@
                     </div>
                     <div class="remove-confirm delete-confirm" id="delete-confirm" hidden role="alertdialog" aria-labelledby="delete-confirm-text">
                         <p id="delete-confirm-text"><strong>Delete &ldquo;${esc(book?.title || "this book")}&rdquo; permanently?</strong>
-                        The listing and its photo will be erased for good. <strong class="inline-strong">This can&rsquo;t be undone.</strong></p>
+                        It will disappear from your listings for good and <strong class="inline-strong">can&rsquo;t be put back</strong>. A record is kept for the site&rsquo;s logs.</p>
                         <div class="remove-confirm-actions">
-                            <button type="button" id="delete-yes" class="btn-danger-solid">Yes, delete forever</button>
+                            <button type="button" id="delete-yes" class="btn-danger-solid">Yes, delete it</button>
                             <button type="button" id="delete-no" class="btn-clear">Keep it</button>
                         </div>
                         <span class="remove-status" id="delete-status" role="status"></span>
@@ -476,11 +476,11 @@
                     toast(`“${title}” was deleted permanently.`);
                 } else {
                     dialog.querySelector("#delete-status").textContent = skipReason(skipped[0]);
-                    yes.disabled = false; yes.textContent = "Yes, delete forever";
+                    yes.disabled = false; yes.textContent = "Yes, delete it";
                 }
             } catch (err) {
                 dialog.querySelector("#delete-status").textContent = err.message || "Could not delete the listing.";
-                yes.disabled = false; yes.textContent = "Yes, delete forever";
+                yes.disabled = false; yes.textContent = "Yes, delete it";
             }
         });
         dialog.querySelector("#dialog-relist")?.addEventListener("click", async (e) => {
@@ -612,8 +612,8 @@
     });
     els("bulk-delete")?.addEventListener("click", () => {
         const n = pickedListings().filter(l => l.status === "Removed").length;
-        showConfirm(`Permanently delete ${n} book${n === 1 ? "" : "s"}? ${n === 1 ? "It" : "They"} will be erased for good — this can't be undone.`);
-        els("bulk-confirm-yes").textContent = `Yes, delete ${n} forever`;
+        showConfirm(`Permanently delete ${n} book${n === 1 ? "" : "s"}? ${n === 1 ? "It" : "They"} will disappear from your listings for good and can't be put back. A record is kept for the site's logs.`);
+        els("bulk-confirm-yes").textContent = `Yes, delete ${n}`;
         els("bulk-bar").classList.add("is-danger");
         confirmAction = btn => runBulkDelete(btn);
     });

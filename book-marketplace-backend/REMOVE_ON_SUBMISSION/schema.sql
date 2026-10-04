@@ -243,3 +243,20 @@ ALTER TABLE `REFUND_REQUEST`
 ALTER TABLE `USER` MODIFY `status`
     ENUM('Active','Suspended','Banned','Pending Verification','Locked')
     NOT NULL DEFAULT 'Pending Verification';
+
+-- Soft delete for listings: "Delete permanently" keeps the row for logging
+ALTER TABLE `USER_BOOKS`
+    ADD COLUMN IF NOT EXISTS `deleted_at` DATETIME NULL DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS `deleted_by` INT UNSIGNED NULL DEFAULT NULL;
+
+-- ============================================================
+-- SOFT DELETE EVERYWHERE — nothing is permanently deleted.
+-- The app adds these columns automatically; this is for reference.
+-- ============================================================
+ALTER TABLE `USER`              ADD COLUMN IF NOT EXISTS `deleted_at` DATETIME NULL DEFAULT NULL;
+ALTER TABLE `BOOK_CATEGORIES`   ADD COLUMN IF NOT EXISTS `deleted_at` DATETIME NULL DEFAULT NULL;
+ALTER TABLE `BOOK_CATEGORY_MAP` ADD COLUMN IF NOT EXISTS `deleted_at` DATETIME NULL DEFAULT NULL;
+ALTER TABLE `TRANSACTIONS`      ADD COLUMN IF NOT EXISTS `deleted_at` DATETIME NULL DEFAULT NULL;
+ALTER TABLE `SYSTEM_RECORDS`    ADD COLUMN IF NOT EXISTS `deleted_at` DATETIME NULL DEFAULT NULL;
+ALTER TABLE `LOGIN_ATTEMPTS`    ADD COLUMN IF NOT EXISTS `cleared_at` DATETIME NULL DEFAULT NULL;
+ALTER TABLE `LIBROWSE_SESSIONS` ADD COLUMN IF NOT EXISTS `revoked_at` DATETIME NULL DEFAULT NULL;

@@ -30,6 +30,8 @@ if (strlen($message) > 1000) {
     Response::error('Please keep your message under 1000 characters.', 422);
 }
 
+ensure_column($pdo, 'USER', 'deleted_at');
+
 $genericReply = [
     'ok'      => true,
     'message' => 'If this account is locked, your unlock request has been sent to the administrators. Try signing in again after they unlock it.',
@@ -37,7 +39,7 @@ $genericReply = [
 
 $stmt = $pdo->prepare(
     'SELECT user_id, username, status FROM `USER`
-     WHERE username = :u OR LOWER(email) = LOWER(:e) LIMIT 1'
+     WHERE deleted_at IS NULL AND (username = :u OR LOWER(email) = LOWER(:e)) LIMIT 1'
 );
 $stmt->execute(['u' => $identifier, 'e' => $identifier]);
 $user = $stmt->fetch();
