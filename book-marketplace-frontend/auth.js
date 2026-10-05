@@ -537,6 +537,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!pw) return;
 
     const fill = document.getElementById("pw-strength-fill");
+    const label = document.getElementById("pw-strength-label");
     const reqEls = {
         length: document.getElementById("req-length"),
         upper:  document.getElementById("req-upper"),
@@ -568,18 +569,38 @@ document.addEventListener("DOMContentLoaded", async () => {
         { label: "Very weak", color: "#ef4444", pct: "20%" },
         { label: "Weak",      color: "#f97316", pct: "40%" },
         { label: "Fair",      color: "#eab308", pct: "60%" },
-        { label: "Strong",    color: "#22c55e", pct: "80%" },
-        { label: "Very strong", color: "#16a34a", pct: "100%" },
+        { label: "Almost there — 1 rule left", color: "#84cc16", pct: "80%" },
+        { label: "Strong", color: "#16a34a", pct: "100%" },
     ];
 
     pw.addEventListener("input", () => {
         const v = pw.value;
         if (!fill) return;
-        if (!v) { fill.style.width = "0"; fill.style.background = ""; return; }
+        if (!v) {
+            fill.style.width = "0"; fill.style.background = "";
+            if (label) { label.textContent = "Password strength: —"; label.style.color = ""; }
+            score("");
+            checkMatch();
+            return;
+        }
         const passed = score(v);
         const lvl = LEVELS[Math.max(0, passed - 1)];
         fill.style.width = lvl.pct;
         fill.style.background = lvl.color;
         fill.setAttribute("aria-label", lvl.label);
+        if (label) { label.textContent = "Password strength: " + lvl.label; label.style.color = lvl.color; }
+        checkMatch();
     });
+
+    /* "Passwords match" / "don't match" under Confirm Password */
+    const confirm = document.getElementById("register-confirm-password");
+    const matchEl = document.getElementById("password-match-indicator");
+    function checkMatch() {
+        if (!confirm || !matchEl) return;
+        if (!confirm.value) { matchEl.textContent = ""; matchEl.className = "password-match-hint"; return; }
+        const ok = confirm.value === pw.value;
+        matchEl.textContent = ok ? "✓ Passwords match" : "✗ Passwords don't match yet";
+        matchEl.className = "password-match-hint " + (ok ? "match" : "no-match");
+    }
+    confirm?.addEventListener("input", checkMatch);
 })();

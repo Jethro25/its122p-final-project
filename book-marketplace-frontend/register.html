@@ -87,25 +87,24 @@
                             </svg>
                         </button>
                     </div>
-                    <span class="input-helper-text">Minimum 6 characters.</span>
-                </div>
-
-                <div class="form-group">
                     <!-- Live password strength meter -->
                     <div class="pw-strength-bar" id="pw-strength-bar" aria-hidden="true">
                         <div class="pw-strength-fill" id="pw-strength-fill"></div>
                     </div>
+                    <span class="pw-strength-label" id="pw-strength-label" aria-live="polite">Password strength: &mdash;</span>
                     <ul class="pw-requirements" id="pw-requirements" aria-live="polite">
-                        <li class="pw-req" id="req-length" data-rule="length">&#x25CB; At least 8 characters</li>
-                        <li class="pw-req" id="req-upper"  data-rule="upper">&#x25CB; One uppercase letter (A&ndash;Z)</li>
-                        <li class="pw-req" id="req-lower"  data-rule="lower">&#x25CB; One lowercase letter (a&ndash;z)</li>
-                        <li class="pw-req" id="req-digit"  data-rule="digit">&#x25CB; One number (0&ndash;9)</li>
-                        <li class="pw-req" id="req-symbol" data-rule="symbol">&#x25CB; One special character (@, #, !, %&hellip;)</li>
+                        <li class="pw-req" id="req-length" data-rule="length">&#x25CB; 8+ characters</li>
+                        <li class="pw-req" id="req-upper"  data-rule="upper">&#x25CB; Uppercase letter</li>
+                        <li class="pw-req" id="req-lower"  data-rule="lower">&#x25CB; Lowercase letter</li>
+                        <li class="pw-req" id="req-digit"  data-rule="digit">&#x25CB; Number</li>
+                        <li class="pw-req" id="req-symbol" data-rule="symbol">&#x25CB; Symbol (! @ # $ %)</li>
                     </ul>
+                </div>
 
+                <div class="form-group">
                     <label for="register-confirm-password">Confirm Password</label>
                     <div class="password-input-wrapper">
-                        <input type="password" id="register-confirm-password" required minlength="6" placeholder="Re-enter your password" autocomplete="new-password">
+                        <input type="password" id="register-confirm-password" required minlength="8" placeholder="Re-enter your password" autocomplete="new-password">
                         <button type="button" class="toggle-password-btn" data-target="register-confirm-password" aria-label="Toggle password visibility" title="Toggle password visibility">
                             <svg viewBox="0 0 24 24">
                                 <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
