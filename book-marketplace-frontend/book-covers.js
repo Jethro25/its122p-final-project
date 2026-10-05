@@ -93,8 +93,18 @@ ${ornament}
 
     window.librowsePlaceholderCover = placeholderCover;
 
+    function apiBase() {
+        if (window.librowseAuth && window.librowseAuth.API_BASE) return window.librowseAuth.API_BASE;
+        return window.LIBROWSE_API_BASE ? String(window.LIBROWSE_API_BASE).replace(/\/$/, "") : "/api";
+    }
+
     window.librowseCoverFor = function (listing, book, categoryText) {
+        // A photo just chosen in this session is shown straight away
         if (listing && listing.cover_image) return listing.cover_image;
+        // Otherwise load the stored photo by address (cached by the browser)
+        if (listing && listing.has_cover) {
+            return `${apiBase()}/user_books.php?action=cover&id=${encodeURIComponent(listing.inventory_id)}&v=${encodeURIComponent(listing.cover_v ?? "")}`;
+        }
         return placeholderCover(book && book.title, book && book.author, categoryText);
     };
 

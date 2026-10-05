@@ -102,6 +102,71 @@ try {
 
 $method = $_SERVER['REQUEST_METHOD'];
 
+/* ── COVER PHOTOS ───────────────────────────────────────────────────────
+   GET /api/user_books.php?action=cover&id=7&v=123
+   Returns the photo itself as an image (public, so <img> tags can load it,
+   and cached by the browser; `v` changes whenever the photo changes).
+   Book lists never include the photo data — sending every photo inside the
+   list would exceed Vercel's 4.5 MB response limit after a dozen photos. */
+if ($method === 'GET' && ($_GET['action'] ?? '') === 'cover') {
+    $stmt = $pdo->prepare('SELECT cover_image FROM `USER_BOOKS` WHERE inventory_id = :id AND deleted_at IS NULL LIMIT 1');
+    $stmt->execute(['id' => (int) ($_GET['id'] ?? 0)]);
+    $img = (string) ($stmt->fetchColumn() ?: '');
+    if (!preg_match('#^data:(image/(?:jpeg|png|webp));base64,(.+)$#s', $img, $m)) {
+        http_response_code(404);
+        header('Content-Type: text/plain');
+        exit('No cover photo.');
+    }
+    header_remove('Pragma');
+    header_remove('Expires');
+    header('Content-Type: ' . $m[1]);
+    header('Cache-Control: public, max-age=31536000, immutable');
+    echo base64_decode($m[2]);
+    exit;
+}
+
+/* Book lists: every column except the photo itself, plus has_cover / cover_v */
+if ($method === 'GET') {
+    require_authenticated_user($pdo);
+    $where = ['deleted_at IS NULL'];
+    $params = [];
+    foreach (['seller_id', 'book_id', 'status', 'listing_type'] as $col) {
+        if (isset($_GET[$col]) && $_GET[$col] !== '') { $where[] = "`{$col}` = :{$col}"; $params[$col] = $_GET[$col]; }
+    }
+    if (isset($_GET['id'])) { $where[] = 'inventory_id = :id'; $params['id'] = (int) $_GET['id']; }
+    $limit = min(1000, max(1, (int) ($_GET['limit'] ?? 1000)));
+    $offset = max(0, (int) ($_GET['offset'] ?? 0));
+    $sql = "SELECT inventory_id, book_id, seller_id, listing_type, price, `condition`, status, listed_at,
+                   (cover_image IS NOT NULL AND cover_image <> '') AS has_cover,
+                   CRC32(cover_image) AS cover_v
+            FROM `USER_BOOKS` WHERE " . implode(' AND ', $where) . "
+            ORDER BY inventory_id ASC LIMIT {$limit} OFFSET {$offset}";
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+    } catch (PDOException $e) {
+        // Fallback if CRC32() isn't supported: use the photo's size as the version
+        try {
+            $stmt = $pdo->prepare(str_replace('CRC32(cover_image)', 'LENGTH(cover_image)', $sql));
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll();
+        } catch (PDOException $e2) {
+            database_error_response($e2);
+        }
+    }
+    foreach ($rows as &$row) {
+        $row['has_cover'] = (bool) $row['has_cover'];
+        if (!$row['has_cover']) $row['cover_v'] = null;
+    }
+    unset($row);
+    if (isset($_GET['id'])) {
+        if (!$rows) Response::error('Listing not found.', 404);
+        Response::json($rows[0]);
+    }
+    Response::json($rows);
+}
+
 if ($method === 'DELETE') {
     $authUser = require_authenticated_user($pdo);
     if ($authUser['role'] === 'Customer') {

@@ -7,6 +7,14 @@
 (function () {
     if (!document.getElementById("bookshelf")) return;
 
+    /* A stored photo that can't load falls back to the generated cover */
+    document.addEventListener("error", e => {
+        const img = e.target;
+        if (img && img.tagName === "IMG" && img.dataset.fallback && img.src !== img.dataset.fallback) {
+            img.src = img.dataset.fallback;
+        }
+    }, true);
+
     const shelf = document.getElementById("bookshelf");
     const listWrap = document.getElementById("catalog-list");
     const countEl = document.getElementById("shelf-count");
@@ -149,7 +157,7 @@
                         aria-label="${selectMode ? (pickable ? "Select " : "Can't select ") : ""}${esc(book?.title || "Unknown book")} by ${esc(book?.author || "unknown author")}, ${esc(shortPrice(listing))}, ${esc(st.label)}">
                     <span class="book-cover">
                         ${selectMode && pickable ? `<span class="pick-check" aria-hidden="true"></span>` : ""}
-                        <img src="${esc(librowseCoverFor(listing, book, categoryText(book)))}" alt="" loading="lazy">
+                        <img src="${esc(librowseCoverFor(listing, book, categoryText(book)))}" data-fallback="${esc(librowsePlaceholderCover(book?.title, book?.author, categoryText(book)))}" alt="" loading="lazy">
                         <span class="book-ribbon ribbon-${listing.listing_type}">${typeRibbon(listing.listing_type)}</span>
                         ${st.out ? `<span class="book-stamp">${esc(st.label)}</span>` : ""}
                         ${isMine(listing) ? `<span class="book-mine">Yours</span>` : ""}
@@ -261,7 +269,7 @@
             <div class="book-dialog-inner">
                 <button type="button" class="dialog-close" aria-label="Close">&times;</button>
                 <div class="dialog-cover">
-                    <img id="dialog-cover-img" src="${esc(librowseCoverFor(listing, book, categoryText(book)))}" alt="Cover of ${esc(book?.title || "this book")}">
+                    <img id="dialog-cover-img" src="${esc(librowseCoverFor(listing, book, categoryText(book)))}" data-fallback="${esc(librowsePlaceholderCover(book?.title, book?.author, categoryText(book)))}" alt="Cover of ${esc(book?.title || "this book")}">
                     ${mine ? `
                     <div class="owner-photo">
                         <p>${listing.cover_image ? "Your photo is showing." : "Showing a library-style placeholder."} Add a real photo of your copy so others can see its condition.</p>
@@ -354,7 +362,7 @@
                     const b = bookOf(l);
                     return `<label class="trade-option">
                         <input type="radio" name="trade-offer" value="${l.inventory_id}" ${i === 0 ? "checked" : ""}>
-                        <img src="${esc(librowseCoverFor(l, b, categoryText(b)))}" alt="">
+                        <img src="${esc(librowseCoverFor(l, b, categoryText(b)))}" data-fallback="${esc(librowsePlaceholderCover(b?.title, b?.author, categoryText(b)))}" alt="">
                         <span><strong>${esc(b?.title || "Book #" + l.inventory_id)}</strong><small>${esc(l.condition || "")}</small></span>
                     </label>`;
                 }).join("")}
@@ -386,6 +394,7 @@
                 body: JSON.stringify({ cover_image: value })
             });
             listing.cover_image = value;
+            listing.has_cover = !!value;      // so a removed photo doesn't come back from the cache
             img.src = librowseCoverFor(listing, book, categoryText(book));
             status.textContent = doneText;
             filterBooks();

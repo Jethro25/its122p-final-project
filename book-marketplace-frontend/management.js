@@ -288,12 +288,12 @@ function renderUsersTable() {
                 <td>${user.user_id}</td>
                 <td><strong>${mgEscape(user.username)}</strong><div class="muted">${mgEscape(user.email)}</div></td>
                 <td>
-                    <select data-user-role="${user.user_id}" ${managementState.role === "staff" ? "disabled" : ""}>
+                    <select aria-label="Role for ${mgEscape(user.username)}" data-user-role="${user.user_id}" ${managementState.role === "staff" ? "disabled" : ""}>
                         ${roleOptions.map(r => `<option value="${r}" ${selected(r,user.role)}>${r}</option>`).join("")}
                     </select>
                 </td>
                 <td>
-                    <select data-user-status="${user.user_id}" ${managementState.role === "staff" && user.status === "Locked" ? "disabled title=\"Only an administrator can unlock this account\"" : ""}>
+                    <select aria-label="Status for ${mgEscape(user.username)}" data-user-status="${user.user_id}" ${managementState.role === "staff" && user.status === "Locked" ? "disabled title=\"Only an administrator can unlock this account\"" : ""}>
                         ${(managementState.role === "staff" && user.status !== "Locked" ? ["Active","Suspended","Banned","Pending Verification"] : ["Active","Suspended","Banned","Pending Verification","Locked"]).map(s => `<option value="${s}" ${selected(s,user.status)}>${s}</option>`).join("")}
                     </select>
                 </td>
@@ -630,7 +630,7 @@ function renderListingsTable() {
             <td>${mgEscape(l.condition)}</td>
             <td>${formatMoney(l.price)}</td>
             <td>
-                <select id="listing-status-${l.inventory_id}">
+                <select aria-label="Status for listing #${l.inventory_id}" id="listing-status-${l.inventory_id}">
                     ${["Available","In_transaction","Sold","Traded","Removed"].map(s => `<option value="${s}" ${selected(s,l.status)}>${s.replaceAll("_"," ")}</option>`).join("")}
                 </select>
             </td>
@@ -702,12 +702,12 @@ function renderReportsTable() {
             <td>${detailsCell}</td>
             <td>${formatDate(r.submitted_at)}</td>
             <td>
-                <select id="report-status-${r.report_id}">
+                <select aria-label="Status for report #${r.report_id}" id="report-status-${r.report_id}">
                     ${["Pending","Under_Review","Approved","Rejected","Resolved","Dismissed"].map(s => `<option value="${s}" ${selected(s,r.status)}>${s.replaceAll("_"," ")}</option>`).join("")}
                 </select>
             </td>
             <td>
-                <textarea id="report-notes-${r.report_id}" placeholder="Resolution/review notes">${mgEscape(r.resolution_notes || "")}</textarea>
+                <textarea aria-label="Resolution notes for report #${r.report_id}" id="report-notes-${r.report_id}" placeholder="Resolution/review notes">${mgEscape(r.resolution_notes || "")}</textarea>
             </td>
             <td>
                 <div class="management-actions">
@@ -772,7 +772,7 @@ function renderTransactionsTable() {
             <td>${mgEscape(um[t.managed_by_staff_id]?.username || "—")}</td>
             <td>${formatDate(t.created_at)}</td>
             <td>
-                <select id="transaction-status-${t.transaction_id}" ${(TX_NEXT[t.status] || []).length ? "" : "disabled"}>
+                <select aria-label="Status for transaction #${t.transaction_id}" id="transaction-status-${t.transaction_id}" ${(TX_NEXT[t.status] || []).length ? "" : "disabled"}>
                     ${[t.status, ...(TX_NEXT[t.status] || [])].map(s => `<option value="${s}" ${selected(s,t.status)}>${s}</option>`).join("")}
                 </select>
             </td>
@@ -815,7 +815,7 @@ function renderRefundsTable() {
             <td>${mgEscape(um[r.processed_by_staff_id]?.username || "—")}</td>
             <td>
                 ${managementState.role === "staff" && r.status === "Pending" ? `
-                <select id="refund-status-${r.refund_id}">
+                <select aria-label="Decision for refund #${r.refund_id}" id="refund-status-${r.refund_id}">
                     ${["Pending","Approved","Rejected"].map(s => `<option value="${s}" ${selected(s,r.status)}>${s}</option>`).join("")}
                 </select>
                 <button class="management-btn primary small" onclick="saveRefund(${r.refund_id})">Save</button>

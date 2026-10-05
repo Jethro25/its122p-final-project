@@ -141,9 +141,16 @@
         var errEl = document.getElementById('err-book-isbn');
         if (!errEl) return true;
         if (val === '') { showError(errEl, 'ISBN is required.'); return false; }
-        if (!/^\d+$/.test(val)) { showError(errEl, 'ISBN must contain numbers only.'); return false; }
-        if (val.length !== 10 && val.length !== 13) {
-            showError(errEl, 'ISBN must be exactly 10 or 13 digits. You entered ' + val.length + '.');
+        // Same rule as the server: spaces/hyphens are fine; ISBN-10 may end in X
+        var clean = val.replace(/[\s-]+/g, '').toUpperCase();
+        if (!/^[0-9X]+$/.test(clean) || clean.slice(0, -1).indexOf('X') !== -1) {
+            showError(errEl, 'ISBN can only contain numbers (and an X at the end of a 10-digit ISBN).'); return false;
+        }
+        if (clean.length === 13 && clean.indexOf('X') !== -1) {
+            showError(errEl, 'A 13-digit ISBN contains numbers only.'); return false;
+        }
+        if (clean.length !== 10 && clean.length !== 13) {
+            showError(errEl, 'ISBN must be 10 or 13 digits. You entered ' + clean.length + '.');
             return false;
         }
         clearError(errEl); return true;
