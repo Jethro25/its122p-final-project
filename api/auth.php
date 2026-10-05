@@ -89,7 +89,9 @@ try {
         $valid = $hash !== '' && password_verify($password, $hash);
 
         // Compatibility migration for the original seed placeholders.
-        if (!$valid && str_starts_with($hash, '$2b$') && $password === 'password') {
+        // Only for the broken placeholder hashes in the original seed data
+        // (they are too short to be real bcrypt hashes). Real hashes never match here.
+        if (!$valid && str_starts_with($hash, '$2b$') && strlen($hash) < 60 && $password === 'password') {
             $hash = password_hash($password, PASSWORD_DEFAULT);
             $up = $pdo->prepare('UPDATE `USER` SET password_hash = :hash WHERE user_id = :id');
             $up->execute(['hash' => $hash, 'id' => $user['user_id']]);
@@ -210,7 +212,9 @@ try {
 
     Response::error('Unknown authentication action.', 404);
 } catch (PDOException $e) {
-    Response::error('Authentication database error.', 500);
+    error_log('[librowse] auth: ' . $e->getMessage());
+    Response::error('Sign-in is temporarily unavailable. Please try again.', 500, api_debug() ? ['details' => $e->getMessage()] : []);
 } catch (Throwable $e) {
-    Response::error('Authentication service error.', 500, ['details' => $e->getMessage()]);
+    error_log('[librowse] auth: ' . $e->getMessage());
+    Response::error('Sign-in is temporarily unavailable. Please try again.', 500, api_debug() ? ['details' => $e->getMessage()] : []);
 }

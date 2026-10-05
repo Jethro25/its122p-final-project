@@ -14,12 +14,7 @@ function dispatch_crud_request(Crud $crud, string $primaryKeyName): void
 {
     global $pdo; /* bring the $pdo connection into function scope */
 
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
-    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-    header('Pragma: no-cache');
-    header('Expires: 0');
+    /* CORS and no-cache headers are already sent by bootstrap.php */
 
     $method = $_SERVER['REQUEST_METHOD'];
 
@@ -82,26 +77,11 @@ function dispatch_crud_request(Crud $crud, string $primaryKeyName): void
     } catch (InvalidArgumentException $e) {
         Response::error($e->getMessage(), 422);
     } catch (PDOException $e) {
-        $code = (int) $e->errorInfo[1] ?? 0;
-        if ($code === 1062) {
-            Response::error('A record with these unique values already exists.', 409, ['details' => $e->getMessage()]);
-        } elseif (in_array($code, [1451, 1452], true)) {
-            Response::error('This operation violates a foreign key relationship.', 409, ['details' => $e->getMessage()]);
-        } else {
-            Response::error('Database error.', 500, ['details' => $e->getMessage()]);
-        }
+        database_error_response($e);
     }
 }
 
 function read_json_body(): array
 {
-    $raw = file_get_contents('php://input');
-    if ($raw === '' || $raw === false) {
-        return [];
-    }
-    $decoded = json_decode($raw, true);
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        Response::error('Request body must be valid JSON.', 400);
-    }
-    return $decoded ?? [];
+    return request_body();
 }

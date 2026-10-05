@@ -11,6 +11,9 @@ const LIBROWSE_SESSION_TTL = 28800; // 8 hours
 
 function ensure_sessions_table(PDO $pdo): void
 {
+    static $done = false;          // only once per request (saves database round trips)
+    if ($done) return;
+    $done = true;
     try {
         $pdo->exec("CREATE TABLE IF NOT EXISTS `LIBROWSE_SESSIONS` (
             `token_hash` VARCHAR(64) NOT NULL,
@@ -64,6 +67,14 @@ function bearer_token_from_request(): ?string
 }
 
 function current_authenticated_user(PDO $pdo): ?array
+{
+    static $cache = [];            // same request asks more than once — only query the database once
+    $token = bearer_token_from_request();
+    if ($token && array_key_exists($token, $cache)) return $cache[$token];
+    return $cache[(string) $token] = lookup_authenticated_user($pdo);
+}
+
+function lookup_authenticated_user(PDO $pdo): ?array
 {
     ensure_sessions_table($pdo);
 

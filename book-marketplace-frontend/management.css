@@ -483,3 +483,21 @@ body.management-body {
 @media (max-width: 800px) { .management-sidebar-bottom::before { display: none; } }
 
 .unlock-request-cell { display: flex; flex-direction: column; gap: 4px; max-width: 320px; font-size: 13px; }
+
+/* Loading + busy states */
+.mg-spinner {
+    display: inline-block; width: 13px; height: 13px; margin-right: 4px; vertical-align: -2px;
+    border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+    animation: mg-spin .75s linear infinite;
+}
+@keyframes mg-spin { to { transform: rotate(360deg); } }
+.management-loading-row td { padding: 22px 14px; color: var(--mg-muted, #8a715f); font-style: italic; text-align: center; }
+.mg-skeleton { position: relative; overflow: hidden; }
+.mg-skeleton::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.55) 50%, transparent 70%) 0 0 / 300% 100%;
+    animation: mg-shimmer 1.3s linear infinite;
+}
+@keyframes mg-shimmer { to { background-position: -300% 0; } }
+.management-btn:disabled { opacity: .7; cursor: progress; }
+@media (prefers-reduced-motion: reduce) { .mg-spinner, .mg-skeleton::after { animation-duration: 2.5s; } }

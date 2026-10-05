@@ -22,6 +22,8 @@ class Crud
     private array $required;
     /** @var string column stamped on delete — rows are never removed from the database */
     private string $softDeleteColumn;
+    /** @var string[] columns never sent back to clients (e.g. password_hash) */
+    private array $hidden;
 
     public function __construct(
         PDO $pdo,
@@ -31,7 +33,8 @@ class Crud
         array $required = [],
         array $enums = [],
         ?array $updatable = null,
-        string $softDeleteColumn = 'deleted_at'
+        string $softDeleteColumn = 'deleted_at',
+        array $hidden = []
     ) {
         $this->pdo = $pdo;
         $this->table = $table;
@@ -41,6 +44,7 @@ class Crud
         $this->enums = $enums;
         $this->required = $required;
         $this->softDeleteColumn = $softDeleteColumn;
+        $this->hidden = $hidden;
         // Make sure the soft-delete column exists (older databases lack it)
         ensure_column($pdo, $table, $softDeleteColumn);
     }
@@ -71,14 +75,22 @@ class Crud
         }
         $sql .= " ORDER BY `{$this->primaryKey}` ASC";
 
-        $limit = isset($queryParams['limit']) ? max(1, (int) $queryParams['limit']) : 50;
+        // Default 500 rows (lists were silently cut off at 50 before); hard cap 1000
+        $limit = isset($queryParams['limit']) ? min(1000, max(1, (int) $queryParams['limit'])) : 500;
         $offset = isset($queryParams['offset']) ? max(0, (int) $queryParams['offset']) : 0;
         $sql .= " LIMIT {$limit} OFFSET {$offset}";
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($bindings);
 
-        return $stmt->fetchAll();
+        return array_map([$this, 'strip'], $stmt->fetchAll());
+    }
+
+    /** Removes hidden columns before a row is returned to a client. */
+    public function strip(array $row): array
+    {
+        foreach ($this->hidden as $col) unset($row[$col]);
+        return $row;
     }
 
     /** GET /api/<resource>?id=5 — returns null for soft-deleted rows */
@@ -91,7 +103,7 @@ class Crud
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch();
 
-        return $row ?: null;
+        return $row ? $this->strip($row) : null;
     }
 
     /**

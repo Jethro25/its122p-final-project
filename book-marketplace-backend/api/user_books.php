@@ -112,8 +112,7 @@ if ($method === 'DELETE') {
 
 if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
     $authUser = require_authenticated_user($pdo);
-    $raw = file_get_contents('php://input') ?: '';
-    $payload = json_decode($raw, true) ?: [];
+    $payload = request_body();
 
     /* Validate the cover photo: must be a small JPEG/PNG/WebP data URL */
     if (array_key_exists('cover_image', $payload) && $payload['cover_image'] !== null && $payload['cover_image'] !== '') {
@@ -230,5 +229,74 @@ $crud = new Crud(
     ],
     softDeleteColumn: 'deleted_at',   // deleted listings stay in the DB but are hidden from the app
 );
+
+/* ── Listing rules (create + edit) ───────────────────────────────────────
+   • A sale listing (For_sale / Both) needs a price from 1 to 9,999.99.
+   • A trade-only listing has no price.
+   • Customers always list as themselves, start as Available, and can only
+     edit price, listing type, condition, photo, and Removed/Available. */
+function normalize_listing_price(string $type, $price): ?string
+{
+    if ($type === 'For_trade') return null;
+    if ($price === null || $price === '' || !is_numeric($price)) {
+        Response::error('Please enter a price for a sale listing.', 422);
+    }
+    $value = round((float) $price, 2);
+    if ($value < 1 || $value > 9999.99) Response::error('Price must be between ₱1 and ₱9,999.99.', 422);
+    return number_format($value, 2, '.', '');
+}
+
+try {
+    if ($method === 'POST' && !isset($_GET['action'])) {
+        $isCustomer = !is_staff_or_admin($authUser);
+        $type = (string) ($payload['listing_type'] ?? '');
+        if (!in_array($type, ['For_sale', 'For_trade', 'Both'], true)) {
+            Response::error('Listing type must be For Sale, For Trade, or Both.', 422);
+        }
+        $book = $pdo->prepare('SELECT book_id FROM `BOOKS_CATALOG` WHERE book_id = :id AND deleted_at IS NULL');
+        $book->execute(['id' => (int) ($payload['book_id'] ?? 0)]);
+        if (!$book->fetch()) Response::error('That book is not in the catalog.', 422);
+
+        $data = [
+            'book_id'      => (int) $payload['book_id'],
+            'seller_id'    => $isCustomer ? (int) $authUser['user_id'] : (int) ($payload['seller_id'] ?? $authUser['user_id']),
+            'listing_type' => $type,
+            'price'        => normalize_listing_price($type, $payload['price'] ?? null),
+            'condition'    => $payload['condition'] ?? null,
+            'status'       => $isCustomer ? 'Available' : ($payload['status'] ?? 'Available'),
+            'cover_image'  => $payload['cover_image'] ?? null,
+        ];
+        Response::json($crud->create($data), 201);
+    }
+
+    if ($method === 'PUT' || $method === 'PATCH') {
+        $id = (int) ($_GET['id'] ?? 0);
+        $current = $crud->show($id);
+        if (!$current) Response::error('Listing not found.', 404);
+
+        if (!is_staff_or_admin($authUser)) {
+            $allowed = ['price', 'listing_type', 'condition', 'cover_image', 'status'];
+            if (array_diff(array_keys($payload), $allowed)) {
+                Response::error('You can only change the price, type, condition, photo, or shelf status.', 422);
+            }
+            $editingDetails = array_intersect(array_keys($payload), ['price', 'listing_type', 'condition']);
+            if ($editingDetails && !in_array($current['status'], ['Available', 'Removed'], true)) {
+                Response::error('This book has a pending or finished sale/trade, so its details can no longer change.', 409);
+            }
+        }
+
+        $update = $payload;
+        if (array_key_exists('price', $payload) || array_key_exists('listing_type', $payload)) {
+            $type = (string) ($payload['listing_type'] ?? $current['listing_type']);
+            $update['price'] = normalize_listing_price($type, array_key_exists('price', $payload) ? $payload['price'] : $current['price']);
+        }
+        $updated = $crud->update($id, $update);
+        Response::json($updated);
+    }
+} catch (InvalidArgumentException $e) {
+    Response::error($e->getMessage(), 422);
+} catch (PDOException $e) {
+    database_error_response($e);
+}
 
 dispatch_crud_request($crud, 'inventory_id');

@@ -35,8 +35,11 @@
             <!-- Customer ID hidden: filled automatically from session -->
             <input type="hidden" id="customer-id" name="customer_id">
 
-            <label for="refund-transaction-id">Transaction ID <span class="required-star">*</span></label>
-            <input type="number" id="refund-transaction-id" name="transaction_id" required placeholder="Enter your Transaction ID">
+            <label for="refund-transaction-id">Which purchase? <span class="required-star">*</span></label>
+            <select id="refund-transaction-id" name="transaction_id" required>
+                <option value="">Loading your completed purchases…</option>
+            </select>
+            <span class="input-helper-text" id="refund-tx-help">Refunds can be requested for completed purchases.</span>
             <span class="field-error" id="err-refund-tx"></span>
 
             <label for="refund-reason">Reason for Refund <span class="required-star">*</span></label>
@@ -154,11 +157,12 @@
             var txEl = document.getElementById('refund-transaction-id');
             var txErr = document.getElementById('err-refund-tx');
             if (txEl) {
-                if (!txEl.value.trim()) { showError(txErr,'Transaction ID is required.'); ok = false; }
-                else if (isNaN(parseInt(txEl.value,10)) || parseInt(txEl.value,10) <= 0) { showError(txErr,'Please enter a valid Transaction ID.'); ok = false; }
+                if (!txEl.value.trim()) { showError(txErr,'Please choose the purchase you want refunded.'); ok = false; }
+                else if (isNaN(parseInt(txEl.value,10)) || parseInt(txEl.value,10) <= 0) { showError(txErr,'Please choose the purchase you want refunded.'); ok = false; }
                 else clearError(txErr);
             }
             if (!validateRequired('refund-reason','err-refund-reason','Reason for Refund')) ok = false;
+            else if (document.getElementById('refund-reason').value.trim().length < 10) { showError(document.getElementById('err-refund-reason'),'Please describe the problem in at least 10 characters.'); ok = false; }
             return ok;
         }
 

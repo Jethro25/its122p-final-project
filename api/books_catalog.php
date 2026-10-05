@@ -65,6 +65,42 @@ function fetch_category_ids(PDO $pdo, array $bookIds): array
 }
 
 ensure_column($pdo, 'BOOK_CATEGORY_MAP', 'deleted_at');
+ensure_column($pdo, 'BOOK_CATEGORIES', 'deleted_at');
+
+/**
+ * Trims and checks title, author and ISBN. ISBN may be typed with spaces or
+ * hyphens; it is stored as 10 or 13 characters (digits, or a final X on ISBN-10).
+ */
+function validate_book_fields(array $body, bool $partial = false): array
+{
+    foreach (['title' => 255, 'author' => 255] as $field => $max) {
+        if (!$partial || array_key_exists($field, $body)) {
+            $value = trim((string) ($body[$field] ?? ''));
+            if ($value === '') Response::error(ucfirst($field) . ' is required.', 422);
+            if (text_length($value) > $max) Response::error(ucfirst($field) . " must be {$max} characters or fewer.", 422);
+            $body[$field] = $value;
+        }
+    }
+    if (!$partial || array_key_exists('isbn', $body)) {
+        $isbn = strtoupper(preg_replace('/[\s-]+/', '', (string) ($body['isbn'] ?? '')));
+        if (!preg_match('/^(\d{13}|\d{9}[\dX])$/', $isbn)) {
+            Response::error('ISBN must be 10 or 13 digits (hyphens and spaces are fine).', 422);
+        }
+        $body['isbn'] = $isbn;
+    }
+    return $body;
+}
+
+/** At least one category, and every chosen category must exist. */
+function valid_category_ids(PDO $pdo, array $ids): array
+{
+    if (!$ids) Response::error('Please select at least one category.', 422);
+    $marks = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM `BOOK_CATEGORIES` WHERE category_id IN ({$marks}) AND deleted_at IS NULL");
+    $stmt->execute($ids);
+    if ((int) $stmt->fetchColumn() !== count($ids)) Response::error('One of the chosen categories no longer exists.', 422);
+    return $ids;
+}
 
 /** Replaces the BOOK_CATEGORY_MAP rows for one book with $categoryIds. */
 function save_category_map(PDO $pdo, int $bookId, array $categoryIds): void
@@ -125,10 +161,17 @@ try {
                 Response::error('Only Customers and Administrators may create book catalog entries.', 403);
             }
             $body = read_json_body();
-            $categoryIds = extract_category_ids($body);
+            $body = validate_book_fields($body);
+            $categoryIds = valid_category_ids($pdo, extract_category_ids($body));
 
-            if (!$categoryIds) {
-                Response::error('Please select at least one category.', 422);
+            /* Same ISBN already in the catalog? Reuse it instead of creating a duplicate */
+            $existing = $pdo->prepare('SELECT * FROM `BOOKS_CATALOG` WHERE isbn = :isbn AND deleted_at IS NULL ORDER BY book_id ASC LIMIT 1');
+            $existing->execute(['isbn' => $body['isbn']]);
+            if ($found = $existing->fetch()) {
+                $map = fetch_category_ids($pdo, [$found['book_id']]);
+                $found['category_ids'] = $map[(int) $found['book_id']] ?? [(int) $found['category_id']];
+                $found['reused'] = true;
+                Response::json($found, 200);
             }
 
             /* category_id keeps the first selected category, satisfying the
@@ -163,12 +206,10 @@ try {
             }
 
             $body = read_json_body();
+            $body = validate_book_fields($body, partial: true);
             $categoryIds = null;
             if (isset($body['category_ids']) || isset($body['category_id'])) {
-                $categoryIds = extract_category_ids($body);
-                if (!$categoryIds) {
-                    Response::error('Please select at least one category.', 422);
-                }
+                $categoryIds = valid_category_ids($pdo, extract_category_ids($body));
                 $body['category_id'] = $categoryIds[0];
             }
 
@@ -206,12 +247,5 @@ try {
 } catch (InvalidArgumentException $e) {
     Response::error($e->getMessage(), 422);
 } catch (PDOException $e) {
-    $code = (int) ($e->errorInfo[1] ?? 0);
-    if ($code === 1062) {
-        Response::error('A record with these unique values already exists.', 409, ['details' => $e->getMessage()]);
-    } elseif (in_array($code, [1451, 1452], true)) {
-        Response::error('This operation violates a foreign key relationship.', 409, ['details' => $e->getMessage()]);
-    } else {
-        Response::error('Database error.', 500, ['details' => $e->getMessage()]);
-    }
+    database_error_response($e);
 }

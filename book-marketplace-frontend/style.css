@@ -1633,3 +1633,30 @@ button.text-link:hover { background: none; color: var(--ink); }
 }
 .pw-strength-label { display: block; margin: 4px 0 0; font-size: 12.5px; font-weight: 700; color: var(--muted); }
 .pw-requirements { margin-bottom: 0; }
+
+/* =========================================================================
+   LOADING + STATUS HELPERS
+   ========================================================================= */
+.inline-spinner {
+    display: inline-block; width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px;
+    border: 2px solid var(--rule-strong); border-top-color: var(--spine); border-radius: 50%;
+    animation: lb-spin .8s linear infinite;
+}
+@keyframes lb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .inline-spinner { animation-duration: 2.4s; } }
+.loading-row td { color: var(--muted); font-style: italic; }
+button.inline-retry, button.btn-small { margin: 0 0 0 8px; padding: 6px 14px; font-size: 13px; }
+button.btn-small { margin-left: 0; }
+button:disabled { opacity: .65; cursor: progress; }
+.tx-sub { margin-top: 2px; font-size: 12.5px; color: var(--muted); }
+.tx-status { display: inline-block; padding: 3px 10px; font-size: 12.5px; font-weight: 700; border-radius: 999px; background: var(--paper); color: var(--ink-2); }
+.tx-pending, .tx-accepted { background: var(--warn-tint); color: var(--warn); }
+.tx-completed { background: var(--ok-tint); color: var(--ok); }
+.tx-cancelled { background: var(--stamp-tint); color: var(--stamp); }
+.tx-disputed { background: var(--info-tint); color: var(--info); }
+.stat-loading {
+    display: inline-block; min-width: 2.2em; border-radius: 6px; color: transparent !important;
+    background: linear-gradient(100deg, var(--paper) 30%, #fff 50%, var(--paper) 70%) 0 0 / 300% 100%;
+    animation: stat-shimmer 1.3s linear infinite;
+}
+@keyframes stat-shimmer { to { background-position: -300% 0; } }

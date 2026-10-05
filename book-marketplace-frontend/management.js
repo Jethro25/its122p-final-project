@@ -293,12 +293,12 @@ function renderUsersTable() {
                     </select>
                 </td>
                 <td>
-                    <select data-user-status="${user.user_id}">
-                        ${["Active","Suspended","Banned","Pending Verification","Locked"].map(s => `<option value="${s}" ${selected(s,user.status)}>${s}</option>`).join("")}
+                    <select data-user-status="${user.user_id}" ${managementState.role === "staff" && user.status === "Locked" ? "disabled title=\"Only an administrator can unlock this account\"" : ""}>
+                        ${(managementState.role === "staff" && user.status !== "Locked" ? ["Active","Suspended","Banned","Pending Verification"] : ["Active","Suspended","Banned","Pending Verification","Locked"]).map(s => `<option value="${s}" ${selected(s,user.status)}>${s}</option>`).join("")}
                     </select>
                 </td>
                 <td>
-                    <textarea data-user-permission="${user.user_id}" aria-label="Permissions for ${mgEscape(user.username)}">${mgEscape(perms)}</textarea>
+                    <textarea data-user-permission="${user.user_id}" ${managementState.role === "staff" ? "disabled" : ""} aria-label="Permissions for ${mgEscape(user.username)}">${mgEscape(perms)}</textarea>
                 </td>
                 <td>${badge(user.status)}</td>
                 <td>${formatDate(user.created_at)}</td>
@@ -306,7 +306,7 @@ function renderUsersTable() {
                     <div class="management-actions">
                         ${user.status === "Locked" && managementState.role === "admin" ? `<button class="management-btn success small" onclick="unlockUser(${user.user_id})">Unlock</button>` : ""}
                         ${user.status === "Locked" && (managementState.reports || []).some(r => Number(r.submitted_by_id) === Number(user.user_id) && ["Pending","Under_Review"].includes(r.status) && parseFormData(r.form_data)?.type === "unlock_request") ? `<span class="management-badge warning">Requested unlock</span>` : ""}
-                        <button class="management-btn primary small" onclick="saveUser(${user.user_id})">Save</button>
+                        ${managementState.role === "staff" && user.status === "Locked" ? `<span class="muted">Admin unlocks</span>` : `<button class="management-btn primary small" onclick="saveUser(${user.user_id})">Save</button>`}
                         ${canDelete ? `<button class="management-btn danger small" onclick="deleteUser(${user.user_id})">Archive</button>` : ""}
                     </div>
                 </td>
@@ -321,10 +321,9 @@ async function saveUser(userId) {
         const statusEl = document.querySelector(`[data-user-status="${userId}"]`);
         const permissionEl = document.querySelector(`[data-user-permission="${userId}"]`);
 
-        const payload = {
-            status: statusEl.value,
-            permission: parsePermissions(permissionEl.value)
-        };
+        // Staff may only change the status; admins can also change permissions and role
+        const payload = { status: statusEl.value };
+        if (managementState.role === "admin") payload.permission = parsePermissions(permissionEl.value);
 
         if (managementState.role === "admin" && roleEl) payload.role = roleEl.value;
 
@@ -743,6 +742,15 @@ async function saveReport(reportId) {
     }
 }
 
+/* Valid next statuses — the server enforces the same rules */
+const TX_NEXT = {
+    Pending:  ["Accepted", "Cancelled", "Disputed"],
+    Accepted: ["Completed", "Cancelled", "Disputed"],
+    Disputed: ["Completed", "Cancelled"],
+    Completed: [],
+    Cancelled: []
+};
+
 function renderTransactionsTable() {
     const tbody = document.getElementById("transactions-body");
     if (!tbody) return;
@@ -764,11 +772,11 @@ function renderTransactionsTable() {
             <td>${mgEscape(um[t.managed_by_staff_id]?.username || "—")}</td>
             <td>${formatDate(t.created_at)}</td>
             <td>
-                <select id="transaction-status-${t.transaction_id}">
-                    ${["Pending","Accepted","Completed","Cancelled","Disputed"].map(s => `<option value="${s}" ${selected(s,t.status)}>${s}</option>`).join("")}
+                <select id="transaction-status-${t.transaction_id}" ${(TX_NEXT[t.status] || []).length ? "" : "disabled"}>
+                    ${[t.status, ...(TX_NEXT[t.status] || [])].map(s => `<option value="${s}" ${selected(s,t.status)}>${s}</option>`).join("")}
                 </select>
             </td>
-            <td><button class="management-btn primary small" onclick="saveTransaction(${t.transaction_id})">Save</button></td>
+            <td>${(TX_NEXT[t.status] || []).length ? `<button class="management-btn primary small" onclick="saveTransaction(${t.transaction_id})">Save</button>` : `<span class="muted">Final</span>`}</td>
         </tr>`;
     }).join("") || `<tr><td colspan="10" class="management-empty">No transactions found.</td></tr>`;
 }
@@ -806,7 +814,7 @@ function renderRefundsTable() {
             <td>${badge(r.status)}</td>
             <td>${mgEscape(um[r.processed_by_staff_id]?.username || "—")}</td>
             <td>
-                ${managementState.role === "staff" ? `
+                ${managementState.role === "staff" && r.status === "Pending" ? `
                 <select id="refund-status-${r.refund_id}">
                     ${["Pending","Approved","Rejected"].map(s => `<option value="${s}" ${selected(s,r.status)}>${s}</option>`).join("")}
                 </select>
@@ -919,6 +927,55 @@ function refreshRenderedData() {
     renderRecordsTable();
 }
 
+/* ── Loading placeholders while data arrives ───────────────────────────── */
+function showLoadingPlaceholders() {
+    document.querySelectorAll(".management-table tbody, tbody[id$='-body']").forEach(tbody => {
+        const cols = tbody.closest("table")?.querySelectorAll("thead th").length || 6;
+        tbody.innerHTML = `<tr class="management-loading-row"><td colspan="${cols}"><span class="mg-spinner" aria-hidden="true"></span> Loading…</td></tr>`;
+    });
+    const stats = document.getElementById("overview-stats");
+    if (stats) stats.innerHTML = Array.from({ length: 4 }, () =>
+        `<div class="management-card mg-skeleton"><div class="management-stat-label">Loading…</div><div class="management-stat-value">&nbsp;</div></div>`).join("");
+}
+
+/* ── Busy buttons: any action button is disabled until its request finishes ── */
+let mgLastButton = null;
+document.addEventListener("click", e => {
+    const btn = e.target.closest("button");
+    if (btn) mgLastButton = btn;
+}, true);
+function withBusyButton(fn, busyText) {
+    return async function (...args) {
+        const btn = mgLastButton;
+        mgLastButton = null;
+        if (btn && btn.dataset.busy === "1") return;          // ignore double clicks
+        const label = btn ? btn.innerHTML : "";
+        if (btn) { btn.dataset.busy = "1"; btn.disabled = true; btn.innerHTML = `<span class="mg-spinner" aria-hidden="true"></span> ${busyText}`; }
+        try { return await fn.apply(this, args); }
+        finally {
+            mgDirty = false;
+            if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = label; delete btn.dataset.busy; }
+        }
+    };
+}
+[["saveUser","Saving…"],["unlockUser","Unlocking…"],["deleteUser","Archiving…"],["saveListing","Saving…"],
+ ["saveReport","Saving…"],["saveTransaction","Saving…"],["saveRefund","Saving…"],["deleteBook","Archiving…"],
+ ["deleteCategory","Archiving…"],["deleteRecord","Archiving…"],["submitBookForm","Saving…"],
+ ["submitCategoryForm","Saving…"],["submitRecordForm","Saving…"],["submitStaffIssue","Sending…"]
+].forEach(([name, text]) => {
+    if (typeof window[name] === "function") window[name] = withBusyButton(window[name], text);
+});
+
+/* ── Auto-refresh that never throws away unsaved edits ──────────────────── */
+let mgDirty = false;
+document.addEventListener("input", e => { if (e.target.closest(".management-section")) mgDirty = true; }, true);
+document.addEventListener("change", e => { if (e.target.closest(".management-section")) mgDirty = true; }, true);
+function safeToAutoRefresh() {
+    if (document.hidden || mgDirty) return false;
+    const active = document.activeElement;
+    return !(active && active.closest && active.closest(".management-section") && /^(INPUT|SELECT|TEXTAREA)$/.test(active.tagName));
+}
+
 async function initManagementPage() {
     if (window.librowseAuthReady && !await window.librowseAuthReady) return;
     const expectedRole = document.body.dataset.managementRole;
@@ -943,6 +1000,7 @@ async function initManagementPage() {
     document.getElementById("staff-issue-form")?.addEventListener("submit", submitStaffIssue);
 
     setActiveTab("overview");
+    showLoadingPlaceholders();
 
     try {
         await reloadCoreData();
@@ -952,6 +1010,7 @@ async function initManagementPage() {
     }
 
     setInterval(async () => {
+        if (!safeToAutoRefresh()) return;      // someone is editing — try again next time
         try {
             await reloadCoreData();
             refreshRenderedData();

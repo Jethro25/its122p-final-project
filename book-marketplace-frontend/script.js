@@ -20,6 +20,12 @@ function librowseApiBase() {
 }
 const API_BASE = librowseApiBase();
 
+/* Escape text before putting it into HTML. Titles, authors, names and
+   reasons are typed by users, so they must never be inserted raw. */
+function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 
 /* GLOBAL DATA */
 
@@ -365,7 +371,7 @@ async function loadBooks() {
     const bookList = document.getElementById("book-list");
     try {
         if (bookList) {
-            bookList.innerHTML = `<tr><td colspan="10">Loading books...</td></tr>`;
+            bookList.innerHTML = `<tr class="loading-row"><td colspan="10"><span class="inline-spinner" aria-hidden="true"></span> Loading books…</td></tr>`;
         }
         const results = await Promise.all([
             apiRequest("user_books.php"),
@@ -383,8 +389,21 @@ async function loadBooks() {
         bookListings.forEach(listing => { inventoryMap[listing.inventory_id] = listing; });
         if (bookList) renderBooks(bookListings);
     } catch (error) {
-        if (bookList) bookList.innerHTML = `<tr><td colspan="10">Unable to connect to the back-end.</td></tr>`;
         console.error(error);
+        const msg = "Couldn't load books right now.";
+        if (bookList) bookList.innerHTML = `<tr><td colspan="10">${msg} Please refresh the page.</td></tr>`;
+        const shelf = document.getElementById("bookshelf");
+        if (shelf) {
+            shelf.innerHTML = `<div class="shelf-empty"><h3>${msg}</h3><p>Check your connection, then try again.</p>
+                <button type="button" id="shelf-retry">Try again</button></div>`;
+            document.getElementById("shelf-retry")?.addEventListener("click", async () => {
+                shelf.innerHTML = '<span class="shelf-skeleton"></span>'.repeat(6);
+                await loadBooks();
+                if (typeof filterBooks === "function") filterBooks();
+            });
+        }
+        const count = document.getElementById("shelf-count");
+        if (count) count.textContent = msg;
     }
 }
 
@@ -459,19 +478,19 @@ function renderBooks(listings) {
             </td>
 
             <td>
-                ${title}
+                ${escapeHTML(title)}
             </td>
 
             <td>
-                ${author}
+                ${escapeHTML(author)}
             </td>
 
             <td>
-                ${categoryNames}
+                ${escapeHTML(categoryNames)}
             </td>
 
             <td>
-                ${sellerName}
+                ${escapeHTML(sellerName)}
             </td>
 
             <td>
@@ -481,7 +500,7 @@ function renderBooks(listings) {
             </td>
 
             <td>
-                ${listing.condition}
+                ${escapeHTML(listing.condition)}
             </td>
 
             <td>
@@ -491,7 +510,7 @@ function renderBooks(listings) {
             </td>
 
             <td>
-                ${listing.status}
+                ${escapeHTML(String(listing.status).replace('_', ' '))}
             </td>
 
             <td class="book-actions"></td>
@@ -505,7 +524,10 @@ function renderBooks(listings) {
             row.querySelector(".book-actions");
 
 
-        if (listing.status === "Available") {
+        const isOwnListing = currentUser && Number(listing.seller_id) === Number(currentUser.user_id);
+        if (isOwnListing) {
+            actionCell.textContent = "Your listing";
+        } else if (listing.status === "Available") {
 
             /* Show Buy button if available for purchase */
 
@@ -519,14 +541,13 @@ function renderBooks(listings) {
 
                 buyButton.textContent = "Buy";
 
-                buyButton.addEventListener(
-                    "click",
-                    function () {
-
-                        buyBook(listing);
-
-                    }
-                );
+                buyButton.addEventListener("click", async function () {
+                if (buyButton.disabled) return;
+                buyButton.disabled = true;
+                buyButton.textContent = "Requesting…";
+                try { await buyBook(listing); }
+                finally { if (buyButton.isConnected) { buyButton.disabled = false; buyButton.textContent = "Buy"; } }
+            });
 
                 actionCell.appendChild(
                     buyButton
@@ -547,14 +568,13 @@ function renderBooks(listings) {
 
                 tradeButton.textContent = "Trade";
 
-                tradeButton.addEventListener(
-                    "click",
-                    function () {
-
-                        tradeBook(listing);
-
-                    }
-                );
+                tradeButton.addEventListener("click", async function () {
+                if (tradeButton.disabled) return;
+                tradeButton.disabled = true;
+                tradeButton.textContent = "Requesting…";
+                try { await tradeBook(listing); }
+                finally { if (tradeButton.isConnected) { tradeButton.disabled = false; tradeButton.textContent = "Trade"; } }
+            });
 
                 actionCell.appendChild(
                     tradeButton
@@ -1164,8 +1184,8 @@ function showNewListingResult(listing, book) {
 
                 return `
                     <tr>
-                        <th>${row[0]}</th>
-                        <td>${row[1]}</td>
+                        <th>${escapeHTML(row[0])}</th>
+                        <td>${escapeHTML(row[1])}</td>
                     </tr>
                 `;
 
@@ -1256,6 +1276,7 @@ async function buyBook(listing) {
         );
 
 
+        if (document.getElementById("book-list")) { await loadBooks(); filterBooks(); }
         await loadTransactions();
 
 
@@ -1355,6 +1376,7 @@ async function tradeBook(listing) {
         );
 
 
+        if (document.getElementById("book-list")) { await loadBooks(); filterBooks(); }
         await loadTransactions();
 
 
@@ -1370,285 +1392,142 @@ async function tradeBook(listing) {
 }
 
 
-/* LOAD TRANSACTIONS */
+/* ==========================================================================
+   TRANSACTIONS (transactions.html)
+   Shows the purchases/trades you requested AND requests made for your books.
+   ========================================================================== */
+function loadingRow(colspan, text) {
+    return `<tr class="loading-row"><td colspan="${colspan}"><span class="inline-spinner" aria-hidden="true"></span> ${escapeHTML(text)}</td></tr>`;
+}
+
+function listingTitle(inventoryId) {
+    const listing = inventoryMap[inventoryId];
+    const book = listing ? bookMap[listing.book_id] : null;
+    return book ? book.title : `Listing #${inventoryId}`;
+}
+
+function isMyListing(inventoryId) {
+    const listing = inventoryMap[inventoryId];
+    return !!(listing && currentUser && Number(listing.seller_id) === Number(currentUser.user_id));
+}
+
+const TX_STATUS_TEXT = {
+    Pending:   "Pending — waiting for staff to confirm",
+    Accepted:  "Accepted — being arranged",
+    Completed: "Completed",
+    Cancelled: "Cancelled",
+    Disputed:  "Disputed — staff are reviewing"
+};
 
 async function loadTransactions() {
-
-    const transactionList =
-        document.getElementById(
-            "transaction-list"
-        );
-
-    if (!transactionList) {
-        return;
-    }
-
+    const list = document.getElementById("transaction-list");
+    if (!list) return;
+    list.innerHTML = loadingRow(7, "Loading your transactions…");
     try {
-
-        transactionList.innerHTML = `
-            <tr>
-                <td colspan="6">
-                    Loading transactions...
-                </td>
-            </tr>
-        `;
-
-
-        const allTransactions =
-            await apiRequest(
-                "transactions.php"
-            );
-
-        transactions =
-            allTransactions.filter(
-                function (transaction) {
-
-                    return Number(
-                        transaction.buyer_id
-                    ) === Number(
-                        currentUser.user_id
-                    );
-
-                }
-            );
-
-
-        renderTransactions(
-            transactions
-        );
-
-
+        const all = await apiRequest("transactions.php");
+        const me = Number(currentUser.user_id);
+        transactions = (Array.isArray(all) ? all : []).filter(t =>
+            Number(t.buyer_id) === me || isMyListing(t.requested_inventory_id) || isMyListing(t.offered_inventory_id)
+        ).sort((x, y) => Number(y.transaction_id) - Number(x.transaction_id));
+        renderTransactions(transactions);
     } catch (error) {
-
-        transactionList.innerHTML = `
-            <tr>
-                <td colspan="6">
-                    Unable to load transactions.
-                </td>
-            </tr>
-        `;
-
+        list.innerHTML = `<tr><td colspan="7">Couldn't load your transactions: ${escapeHTML(error.message)}
+            <button type="button" class="inline-retry" id="tx-retry">Try again</button></td></tr>`;
+        document.getElementById("tx-retry")?.addEventListener("click", loadTransactions);
     }
-
 }
-
-
-/* DISPLAY TRANSACTIONS */
 
 function renderTransactions(transactionData) {
-
-    const transactionList =
-        document.getElementById(
-            "transaction-list"
-        );
-
-
-    if (transactionData.length === 0) {
-
-        transactionList.innerHTML = `
-            <tr>
-                <td colspan="6">
-                    No transactions found.
-                </td>
-            </tr>
-        `;
-
+    const list = document.getElementById("transaction-list");
+    if (!list) return;
+    if (!transactionData.length) {
+        list.innerHTML = `<tr><td colspan="7">No transactions yet. <a href="browse.html">Browse books</a> to buy or trade.</td></tr>`;
         return;
-
     }
-
-
-    transactionList.innerHTML = "";
-
-
-    transactionData.forEach(
-        function (transaction) {
-
-            /* Find inventory record */
-
-            const inventory =
-                inventoryMap[
-                transaction
-                    .requested_inventory_id
-                ];
-
-
-            /* Find book from inventory */
-
-            let bookTitle =
-                "Unknown Book";
-
-
-            if (inventory) {
-
-                const book =
-                    bookMap[
-                    inventory.book_id
-                    ];
-
-
-                if (book) {
-
-                    bookTitle =
-                        book.title;
-
-                }
-
-            }
-
-
-            const row =
-                document.createElement("tr");
-
-
-            row.innerHTML = `
-
-                <td>
-                    ${transaction.transaction_id}
-                </td>
-
-                <td>
-                    ${bookTitle}
-                </td>
-
-                <td>
-                    ${transaction.transaction_type}
-                </td>
-
-                <td>
-                    ${formatPrice(
-                transaction.amount_paid
-            )}
-                </td>
-
-                <td>
-                    ${transaction.status}
-                </td>
-
-                <td class="transaction-action"></td>
-
-            `;
-
-
-            const actionCell =
-                row.querySelector(
-                    ".transaction-action"
-                );
-
-
-            /* Allow canceling pending transactions */
-
-            if (
-                transaction.status ===
-                "Pending"
-            ) {
-
-                const cancelButton =
-                    document.createElement(
-                        "button"
-                    );
-
-
-                cancelButton.textContent =
-                    "Cancel";
-
-
-                cancelButton.addEventListener(
-                    "click",
-                    function () {
-
-                        cancelTransaction(
-                            transaction
-                                .transaction_id
-                        );
-
-                    }
-                );
-
-
-                actionCell.appendChild(
-                    cancelButton
-                );
-
-            } else {
-
-                actionCell.textContent =
-                    "-";
-
-            }
-
-
-            transactionList.appendChild(
-                row
-            );
-
+    const me = Number(currentUser.user_id);
+    list.innerHTML = "";
+    transactionData.forEach(t => {
+        const iAmBuyer = Number(t.buyer_id) === me;
+        let book = escapeHTML(listingTitle(t.requested_inventory_id));
+        if (t.transaction_type === "Trade" && t.offered_inventory_id) {
+            book += `<div class="tx-sub">in exchange for ${escapeHTML(listingTitle(t.offered_inventory_id))}</div>`;
         }
-    );
-
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>#${escapeHTML(t.transaction_id)}</td>
+            <td>${book}</td>
+            <td>${escapeHTML(t.transaction_type)}</td>
+            <td>${t.transaction_type === "Trade" ? "—" : escapeHTML(formatPrice(t.amount_paid))}</td>
+            <td><span class="tx-status tx-${escapeHTML(String(t.status).toLowerCase())}">${escapeHTML(TX_STATUS_TEXT[t.status] || t.status)}</span></td>
+            <td>${iAmBuyer ? "You requested it" : "Request for your book"}</td>
+            <td class="transaction-action"></td>`;
+        const action = row.querySelector(".transaction-action");
+        if (iAmBuyer && t.status === "Pending") {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn-small";
+            btn.textContent = "Cancel";
+            btn.addEventListener("click", () => cancelTransaction(t.transaction_id, btn));
+            action.appendChild(btn);
+        } else {
+            action.textContent = "—";
+        }
+        list.appendChild(row);
+    });
 }
 
-
-/* CANCEL TRANSACTION */
-
-async function cancelTransaction(
-    transactionId
-) {
-
-    const confirmed =
-        confirm(
-            "Are you sure you want to cancel this transaction?"
-        );
-
-
-    if (!confirmed) {
-        return;
-    }
-
-
+async function cancelTransaction(transactionId, button) {
+    if (!confirm("Cancel this request? The book will go back on the shelf.")) return;
+    if (button) { button.disabled = true; button.textContent = "Cancelling…"; }
     try {
-
-        await apiRequest(
-            `transactions.php?id=${transactionId}`,
-            {
-
-                method: "PUT",
-
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-
-                body:
-                    JSON.stringify(
-                        {
-                            status:
-                                "Cancelled"
-                        }
-                    )
-
-            }
-        );
-
-
-        alert(
-            "Transaction cancelled."
-        );
-
-
+        await apiRequest(`transactions.php?id=${transactionId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "Cancelled" })
+        });
+        await loadBooks();
         await loadTransactions();
-
-
     } catch (error) {
-
-        alert(
-            "Unable to cancel transaction.\n\n" +
-            error.message
-        );
-
+        alert("Unable to cancel this request.\n\n" + error.message);
+        if (button) { button.disabled = false; button.textContent = "Cancel"; }
     }
-
 }
 
+
+/* ==========================================================================
+   REFUND FORM: pick from your completed purchases (support.html)
+   ========================================================================== */
+async function loadRefundOptions() {
+    const select = document.getElementById("refund-transaction-id");
+    if (!select || select.tagName !== "SELECT") return;
+    const help = document.getElementById("refund-tx-help");
+    select.disabled = true;
+    select.innerHTML = `<option value="">Loading your completed purchases…</option>`;
+    try {
+        const [txs, refunds] = await Promise.all([
+            apiRequest("transactions.php"),
+            apiRequest("refund_request.php")
+        ]);
+        const me = Number(currentUser.user_id);
+        const blocked = new Set((refunds || [])
+            .filter(r => ["Pending", "Approved"].includes(r.status))
+            .map(r => Number(r.transaction_id)));
+        const eligible = (txs || []).filter(t =>
+            Number(t.buyer_id) === me && t.transaction_type === "Purchase" &&
+            t.status === "Completed" && !blocked.has(Number(t.transaction_id)));
+        if (!eligible.length) {
+            select.innerHTML = `<option value="">No completed purchases to refund</option>`;
+            if (help) help.textContent = "Only completed purchases without an open refund appear here.";
+            return;
+        }
+        select.innerHTML = `<option value="">Choose a purchase</option>` + eligible.map(t =>
+            `<option value="${escapeHTML(t.transaction_id)}">#${escapeHTML(t.transaction_id)} — ${escapeHTML(listingTitle(t.requested_inventory_id))} (${escapeHTML(formatPrice(t.amount_paid))})</option>`
+        ).join("");
+        select.disabled = false;
+    } catch (error) {
+        select.innerHTML = `<option value="">Couldn't load purchases — refresh to try again</option>`;
+    }
+}
 
 /* REFUND REQUEST */
 
@@ -1733,6 +1612,7 @@ async function submitRefund(event) {
                 "refund-form"
             )
             .reset();
+        await loadRefundOptions();
 
 
     } catch (error) {
@@ -1884,7 +1764,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     const hasTransactions = !!document.getElementById("transaction-list");
     const hasCategories = !!document.getElementById("book-category-options") || !!document.getElementById("filter-category-options");
 
-    if (hasBrowse || hasTransactions) await loadBooks();
+    const hasRefundPicker = !!document.getElementById("refund-transaction-id");
+    if (hasBrowse || hasTransactions || hasRefundPicker) await loadBooks();
+    if (hasRefundPicker) await loadRefundOptions();
     if (hasTransactions) await loadTransactions();
     if (hasCategories) await loadCategories();
 });

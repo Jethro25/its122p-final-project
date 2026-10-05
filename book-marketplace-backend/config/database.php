@@ -76,10 +76,13 @@ try {
     header('Access-Control-Allow-Headers: Content-Type, Authorization, Cache-Control');
     http_response_code(500);
     header('Content-Type: application/json');
-    echo json_encode([
-        'error'   => 'Database connection failed.',
-        'details' => $e->getMessage(),
-        'hint'    => "DB_HOST={$dbHost} DB_PORT={$dbPort} DB_NAME={$dbName} DB_USER={$dbUser}",
-    ]);
+    error_log('[librowse] database connection failed: ' . $e->getMessage());
+    $reply = ['error' => 'Database connection failed. Please try again in a moment.'];
+    // Set APP_DEBUG=1 in Vercel to see the real reason while troubleshooting
+    if (getenv('APP_DEBUG') === '1') {
+        $reply['details'] = $e->getMessage();
+        $reply['hint'] = "DB_HOST={$dbHost} DB_PORT={$dbPort} DB_NAME={$dbName} DB_USER={$dbUser}";
+    }
+    echo json_encode($reply);
     exit;
 }
