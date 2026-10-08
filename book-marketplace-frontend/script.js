@@ -109,7 +109,7 @@ function updateAuthStatusUI() {
 
     authStatus.innerHTML = `
         <span>
-            Signed in as <strong>${currentUser.username}</strong>
+            Signed in as <strong>${escapeHTML(currentUser.username)}</strong>
         </span>
 
         <button id="logout-button" type="button">
@@ -289,12 +289,15 @@ async function apiRequest(endpoint, options = {}) {
 
     } catch (error) {
 
-        if (error.name === "AbortError") {
-
-            error = new Error(
-                `Request to ${url} timed out. Is the PHP server running (php -S 127.0.0.1:8000) and reachable?`
-            );
-
+        /* No reply (timeout or connection lost). For a save, we can't know
+           whether the server received it — say so honestly. Trying again is
+           safe: the same Idempotency-Key is reused, so it is never saved twice. */
+        const method = String(options.method || "GET").toUpperCase();
+        if (error.name === "AbortError" || error instanceof TypeError) {
+            console.warn("No reply from", url, error);
+            error = new Error(method === "GET"
+                ? "Librowse is taking too long to respond. Check your connection and try again."
+                : "We didn't get a reply from Librowse, so we can't tell if this went through. Check your list before trying again — trying again is safe and won't submit it twice.");
         }
 
         console.error(

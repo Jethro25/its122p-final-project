@@ -111,6 +111,58 @@ function setActiveTab(tab) {
         button.classList.toggle("active", button.dataset.tab === tab);
     });
     managementState.activeTab = tab;
+    if (tab === "activity") loadActivity();
+}
+
+/* ── Activity Log & Monitoring (Admin) ───────────────────────────────── */
+async function loadActivity() {
+    const body = document.getElementById("activity-body");
+    if (!body) return;
+    const event = document.getElementById("activity-event")?.value || "";
+    const severity = document.getElementById("activity-severity")?.value || "";
+    const qs = new URLSearchParams({ limit: "300" });
+    if (event) qs.set("event", event);
+    if (severity) qs.set("severity", severity);
+    body.innerHTML = `<tr><td colspan="6" class="management-empty">Loading…</td></tr>`;
+    try {
+        const [summary, rows] = await Promise.all([
+            mgApi("activity_log.php?summary=1"),
+            mgApi(`activity_log.php?${qs}`)
+        ]);
+        const s = summary.summary || {};
+        document.getElementById("activity-stats").innerHTML = [
+            ["Failed sign-ins (1 h)", s.failed_logins_1h],
+            ["Accounts locked (24 h)", s.accounts_locked_24h],
+            ["Permission denied (24 h)", s.permission_denied_24h],
+            ["Idle sign-outs (24 h)", s.idle_signouts_24h]
+        ].map(([label, value]) => `
+            <div class="management-card">
+                <div class="management-stat-label">${mgEscape(label)}</div>
+                <div class="management-stat-value">${Number(value || 0)}</div>
+            </div>`).join("");
+        const alerts = summary.alerts || [];
+        document.getElementById("activity-alerts").innerHTML = alerts.length
+            ? alerts.map(a => `<p class="management-badge ${a.level === "critical" ? "danger" : "warning"}" style="display:block;margin:6px 0;padding:8px 12px">${mgEscape(a.message)}</p>`).join("")
+            : `<p class="management-badge success" style="display:inline-block;padding:6px 12px">No unusual activity detected.</p>`;
+        const sevBadge = { critical: "danger", warning: "warning", info: "muted" };
+        body.innerHTML = rows.map(r => `
+            <tr>
+                <td>${formatDate(r.created_at + "Z")}</td>
+                <td><span class="management-badge ${sevBadge[r.severity] || "muted"}">${mgEscape(r.severity)}</span></td>
+                <td>${mgEscape(String(r.event).replaceAll("_", " "))}</td>
+                <td>${r.user_id ? mgEscape(r.username || `User #${r.user_id}`) : "<span class='muted'>—</span>"}</td>
+                <td class="management-code">${mgEscape(r.details || "")}</td>
+                <td>${mgEscape(r.ip_address || "")}</td>
+            </tr>`).join("") || `<tr><td colspan="6" class="management-empty">No activity matches these filters.</td></tr>`;
+    } catch (error) {
+        body.innerHTML = `<tr><td colspan="6" class="management-empty">${mgEscape(error.message)}</td></tr>`;
+    }
+}
+
+async function logoutAllDevices() {
+    if (!confirm("Log out of Librowse on every computer and phone, including this one?")) return;
+    if (window.librowseAuth?.logoutAll) await window.librowseAuth.logoutAll();
+    window.location.replace("login.html");
 }
 
 function goBackToMarketplace() {
@@ -988,6 +1040,10 @@ async function initManagementPage() {
     });
 
     document.getElementById("management-logout")?.addEventListener("click", logoutManagement);
+    document.getElementById("management-logout-all")?.addEventListener("click", logoutAllDevices);
+    document.getElementById("activity-refresh")?.addEventListener("click", loadActivity);
+    document.getElementById("activity-event")?.addEventListener("change", loadActivity);
+    document.getElementById("activity-severity")?.addEventListener("change", loadActivity);
     document.getElementById("marketplace-link")?.addEventListener("click", goBackToMarketplace);
 
     document.getElementById("users-search")?.addEventListener("input", renderUsersTable);
@@ -1011,11 +1067,16 @@ async function initManagementPage() {
 
     setInterval(async () => {
         if (!safeToAutoRefresh()) return;      // someone is editing — try again next time
+        // Auto-refresh is not the user doing something, so it must not keep
+        // the session alive (the idle timeout still applies).
+        window.librowseBackgroundRequest = true;
         try {
             await reloadCoreData();
             refreshRenderedData();
         } catch (e) {
             console.warn("Auto-refresh failed:", e.message);
+        } finally {
+            window.librowseBackgroundRequest = false;
         }
     }, 30000);
 }

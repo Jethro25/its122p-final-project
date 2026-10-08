@@ -29,11 +29,13 @@
             <button data-tab="transactions">Transactions</button>
             <button data-tab="refunds">Refunds</button>
             <button data-tab="records">System Records</button>
+            <button data-tab="activity">Activity Log</button>
         </nav>
 
         <div class="management-sidebar-bottom">
             <a id="marketplace-link" href="index.html">Back to marketplace</a>
             <button id="management-logout" type="button">Log out</button>
+            <button id="management-logout-all" type="button" title="Ends your sessions on every computer and phone">Log out of all devices</button>
         </div>
     </aside>
 
@@ -237,6 +239,53 @@
                     <table class="management-table">
                         <thead><tr><th>ID</th><th>Admin</th><th>Type</th><th>Details</th><th>Created</th><th>Actions</th></tr></thead>
                         <tbody id="records-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="management-section" data-section="activity">
+            <div class="management-panel">
+                <h3>Activity Log &amp; Monitoring</h3>
+                <p class="helper">Sign-ins, lockouts, permission denials and important changes, recorded automatically with time, account and IP address. Passwords and session tokens are never logged. Entries can't be edited or deleted.</p>
+                <div id="activity-alerts"></div>
+                <div id="activity-stats" class="management-grid cards-4" style="margin-top:12px"></div>
+            </div>
+            <div class="management-panel">
+                <div class="management-toolbar">
+                    <div class="management-field">
+                        <label for="activity-event">Event</label>
+                        <select id="activity-event">
+                            <option value="">All events</option>
+                            <option value="login_failed">Failed sign-ins</option>
+                            <option value="login_success">Successful sign-ins</option>
+                            <option value="account_locked">Accounts locked</option>
+                            <option value="account_unlocked">Accounts unlocked</option>
+                            <option value="login_rate_limited">Blocked by IP limit</option>
+                            <option value="permission_denied">Permission denied</option>
+                            <option value="session_idle_timeout">Idle sign-outs</option>
+                            <option value="logout">Sign-outs</option>
+                            <option value="user_updated">User changes</option>
+                            <option value="transaction_status_changed">Transaction changes</option>
+                            <option value="reservation_expired">Expired reservations</option>
+                            <option value="refund_decided">Refund decisions</option>
+                        </select>
+                    </div>
+                    <div class="management-field">
+                        <label for="activity-severity">Severity</label>
+                        <select id="activity-severity">
+                            <option value="">Any</option>
+                            <option value="critical">Critical</option>
+                            <option value="warning">Warning</option>
+                            <option value="info">Info</option>
+                        </select>
+                    </div>
+                    <button class="management-btn" type="button" id="activity-refresh">Refresh</button>
+                </div>
+                <div class="management-table-wrap">
+                    <table class="management-table">
+                        <thead><tr><th>Time</th><th>Severity</th><th>Event</th><th>Account</th><th>Details</th><th>IP address</th></tr></thead>
+                        <tbody id="activity-body"><tr><td colspan="6" class="management-empty">Open this tab to load the log.</td></tr></tbody>
                     </table>
                 </div>
             </div>

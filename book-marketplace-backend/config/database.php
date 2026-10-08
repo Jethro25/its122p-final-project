@@ -71,13 +71,13 @@ $pdo = null;
 try {
     $pdo = new PDO($dsn, $dbUser, $dbPass, $pdoOptions);
 } catch (PDOException $e) {
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, Cache-Control');
-    http_response_code(500);
+    // The website is up but the database isn't: 503 = temporarily unavailable.
+    // CORS headers were already sent by bootstrap.php. Nothing was saved.
+    http_response_code(503);
+    header('Retry-After: 30');
     header('Content-Type: application/json');
     error_log('[librowse] database connection failed: ' . $e->getMessage());
-    $reply = ['error' => 'Database connection failed. Please try again in a moment.'];
+    $reply = ['error' => 'Librowse is temporarily unavailable. Nothing was saved — please try again in a moment.'];
     // Set APP_DEBUG=1 in Vercel to see the real reason while troubleshooting
     if (getenv('APP_DEBUG') === '1') {
         $reply['details'] = $e->getMessage();

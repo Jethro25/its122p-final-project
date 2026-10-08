@@ -7,6 +7,15 @@
  * Delete this file after setup is complete.
  */
 
+/* This script DROPS and recreates every table. It must never be reachable
+   from the internet: allow it only from this computer, never on Vercel. */
+$remote = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+if (PHP_SAPI !== 'cli' && (getenv('VERCEL') || !in_array($remote, ['127.0.0.1', '::1'], true))) {
+    http_response_code(403);
+    header('Content-Type: text/plain');
+    exit('Setup can only be run from the computer hosting Librowse.');
+}
+
 $dbHost = '127.0.0.1';
 $dbPort = '3306';
 $dbUser = 'root';

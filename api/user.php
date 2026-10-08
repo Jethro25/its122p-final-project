@@ -43,6 +43,18 @@ function public_fields(array $row, array $authUser): array
     ];
 }
 
+/* Same rules as self-registration, enforced here too (admins use this
+   endpoint, and a request can be sent without the admin page). */
+function validate_user_fields(array $body): void
+{
+    if (array_key_exists('username', $body) && !preg_match('/^[a-zA-Z0-9_]{3,50}$/', (string) $body['username'])) {
+        Response::error('Username must be 3-50 characters and contain only letters, numbers, and underscores.', 422, ['field' => 'username']);
+    }
+    if (array_key_exists('email', $body) && !filter_var((string) $body['email'], FILTER_VALIDATE_EMAIL)) {
+        Response::error('Please provide a valid email address.', 422, ['field' => 'email']);
+    }
+}
+
 try {
     if ($method === 'GET') {
         if (!is_staff_or_admin($authUser)) {
@@ -64,9 +76,12 @@ try {
         $password = (string) ($body['password'] ?? '');
         if (strlen($password) < 8) Response::error('Password must be at least 8 characters.', 422);
         unset($body['password'], $body['password_hash']);
+        validate_user_fields($body);
         $body['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
         try {
-            Response::json($crud->create($body), 201);
+            $newUser = $crud->create($body);
+            log_event('user_created_by_admin', (int) $authUser['user_id'], ['new_user_id' => (int) $newUser['user_id'], 'role' => $newUser['role'] ?? null]);
+            Response::json($newUser, 201);
         } catch (InvalidArgumentException $e) {
             Response::error($e->getMessage(), 422);
         }
@@ -82,6 +97,7 @@ try {
         if (array_key_exists('password_hash', $body)) {
             Response::error('Passwords cannot be changed here.', 422);
         }
+        validate_user_fields($body);
         if ($id === (int) $authUser['user_id']) {
             if (isset($body['role']) && $body['role'] !== $target['role']) {
                 Response::error('You cannot change your own role.', 403);
@@ -103,6 +119,34 @@ try {
                 Response::error('Only an administrator can lock or unlock an account.', 403);
             }
         }
+
+        try {
+            $updated = $crud->update($id, $body);
+        } catch (InvalidArgumentException $e) {
+            Response::error($e->getMessage(), 422);
+        }
+        $changes = [];
+        foreach (['role', 'status', 'username', 'email'] as $f) {
+            if (array_key_exists($f, $body) && (string) $body[$f] !== (string) $target[$f]) {
+                $changes[$f] = ['from' => $target[$f], 'to' => $body[$f]];
+            }
+        }
+        /* New role or no longer Active → end that user's sessions right now,
+           so the new permissions apply immediately on every device. (Each
+           request also re-checks the role on the server.) */
+        $ended = 0;
+        if (isset($changes['role']) || (isset($changes['status']) && $body['status'] !== 'Active')) {
+            $ended = revoke_all_sessions_for_user($id);
+        }
+        if ($changes) {
+            $unlock = ($changes['status']['from'] ?? '') === 'Locked';
+            log_event($unlock ? 'account_unlocked' : 'user_updated', (int) $authUser['user_id'], [
+                'target_user_id' => $id,
+                'changes'        => $changes,
+                'sessions_ended' => $ended,
+            ], isset($changes['role']) ? 'warning' : 'info');
+        }
+        Response::json($updated);
     }
 
     if ($method === 'DELETE') {
@@ -110,6 +154,13 @@ try {
         if ((int) ($_GET['id'] ?? 0) === (int) $authUser['user_id']) {
             Response::error('You cannot archive your own account.', 403);
         }
+        $archiveId = (int) ($_GET['id'] ?? 0);
+        if ($crud->delete($archiveId)) {
+            revoke_all_sessions_for_user($archiveId);
+            log_event('user_archived', (int) $authUser['user_id'], ['target_user_id' => $archiveId], 'warning');
+            Response::json(['message' => 'Deleted', 'user_id' => $archiveId]);
+        }
+        Response::error('User not found.', 404);
     }
 } catch (PDOException $e) {
     database_error_response($e);

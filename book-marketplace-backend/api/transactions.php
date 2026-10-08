@@ -13,6 +13,16 @@
  *           marks books Sold/Traded; cancelling puts them back on the shelf.
  *   DELETE  Admin only (soft delete).
  *
+ *   Reservations expire: a Pending request that nobody accepted within
+ *   RESERVATION_HOURS (default 72, see lib/config.php; stored per request
+ *   in TRANSACTIONS.reserved_until) is cancelled
+ *   automatically and its book(s) go back on the shelf, so a book can't be
+ *   held forever by someone who never follows through.
+ *
+ *   Two staff acting at once: a status change only applies if the
+ *   transaction is still in the status the staff member saw. Otherwise the
+ *   second one gets 409 "just changed by someone else" (no lost update).
+ *
  *   Valid status changes:
  *     Pending  -> Accepted | Cancelled | Disputed
  *     Accepted -> Completed | Cancelled | Disputed
@@ -75,6 +85,43 @@ function set_listing_status(PDO $pdo, array $ids, string $to, array $from): int
     return $stmt->rowCount();
 }
 
+/** Cancels Pending requests older than RESERVATION_HOURS and frees their books. */
+function expire_stale_reservations(PDO $pdo): void
+{
+    try {
+        $find = $pdo->prepare(
+            "SELECT transaction_id, buyer_id, requested_inventory_id, offered_inventory_id FROM `TRANSACTIONS`
+             WHERE status = 'Pending' AND deleted_at IS NULL
+               AND reserved_until IS NOT NULL AND reserved_until < UTC_TIMESTAMP() LIMIT 50"
+        );
+        $find->execute();
+        foreach ($find->fetchAll() as $tx) {
+            $pdo->beginTransaction();
+            $upd = $pdo->prepare("UPDATE `TRANSACTIONS` SET status = 'Cancelled' WHERE transaction_id = :id AND status = 'Pending'");
+            $upd->execute(['id' => $tx['transaction_id']]);
+            if ($upd->rowCount() === 1) {
+                set_listing_status($pdo, [$tx['requested_inventory_id'], $tx['offered_inventory_id']], 'Available', ['In_transaction']);
+                $pdo->commit();
+                log_event('reservation_expired', (int) $tx['buyer_id'], [
+                    'transaction_id' => (int) $tx['transaction_id'],
+                    'after_hours'    => LIBROWSE_RESERVATION_HOURS,
+                ]);
+            } else {
+                $pdo->commit();          // someone else already changed it
+            }
+        }
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[librowse] reservation expiry: ' . $e->getMessage());
+    }
+}
+
+ensure_column($pdo, 'USER_BOOKS', 'deleted_at');   // a fresh database may not have it yet
+// When a Pending request stops holding the book (only set for new requests,
+// so older data is never cancelled by surprise)
+ensure_column($pdo, 'TRANSACTIONS', 'reserved_until');
+expire_stale_reservations($pdo);
+
 try {
     /* ── GET ─────────────────────────────────────────────────────────── */
     if ($method === 'GET' && $isCustomer) {
@@ -100,6 +147,8 @@ try {
     /* ── POST: a customer requests a purchase or a trade ─────────────── */
     if ($method === 'POST') {
         if (!$isCustomer) Response::error('Only customers can buy or trade books.', 403);
+        // Double click / retry after a dropped connection → same reply, no second request
+        idempotency_begin($pdo, $me, 'transactions');
         $body = request_body();
         $type = (string) ($body['transaction_type'] ?? '');
         if (!in_array($type, ['Purchase', 'Trade'], true)) {
@@ -147,11 +196,19 @@ try {
                 'amount_paid'            => $amount,
                 'status'                 => 'Pending',
             ]);
+            $pdo->prepare('UPDATE `TRANSACTIONS` SET reserved_until = UTC_TIMESTAMP() + INTERVAL :h HOUR WHERE transaction_id = :id')
+                ->execute(['h' => LIBROWSE_RESERVATION_HOURS, 'id' => (int) $created['transaction_id']]);
             $pdo->commit();
+            $created = $crud->show((int) $created['transaction_id']);
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e;
         }
+        log_event('transaction_requested', $me, [
+            'transaction_id' => (int) $created['transaction_id'],
+            'type'           => $type,
+            'inventory_id'   => (int) $requested['inventory_id'],
+        ]);
         Response::json($created, 201);
     }
 
@@ -179,9 +236,25 @@ try {
         $listingIds = array_filter([(int) $tx['requested_inventory_id'], (int) ($tx['offered_inventory_id'] ?? 0)]);
         $pdo->beginTransaction();
         try {
-            $update = ['status' => $to];
-            if (!$isCustomer) $update['managed_by_staff_id'] = $me;
-            $updated = $crud->update($id, $update);
+            /* Only change it if it is STILL in the status this user saw.
+               If another staff member (or the reservation timer) changed it
+               a moment ago, nothing is overwritten. */
+            $sql = 'UPDATE `TRANSACTIONS` SET status = :to' . ($isCustomer ? '' : ', managed_by_staff_id = :staff')
+                 . ' WHERE transaction_id = :id AND status = :from AND deleted_at IS NULL';
+            $params = ['to' => $to, 'id' => $id, 'from' => $from];
+            if (!$isCustomer) $params['staff'] = $me;
+            $upd = $pdo->prepare($sql);
+            $upd->execute($params);
+            if ($upd->rowCount() !== 1) {
+                $pdo->rollBack();
+                $now = $crud->show($id);
+                Response::error(
+                    'This transaction was just changed by someone else' . ($now ? " (it is now {$now['status']})" : '')
+                    . '. Refresh to see the latest version.',
+                    409,
+                    ['current' => $now]
+                );
+            }
             if ($to === 'Completed') {
                 set_listing_status($pdo, $listingIds, $tx['transaction_type'] === 'Trade' ? 'Traded' : 'Sold', ['In_transaction', 'Available']);
             } elseif ($to === 'Cancelled') {
@@ -192,7 +265,8 @@ try {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e;
         }
-        Response::json($updated);
+        log_event('transaction_status_changed', $me, ['transaction_id' => $id, 'from' => $from, 'to' => $to]);
+        Response::json($crud->show($id));
     }
 
     if ($method === 'DELETE') {

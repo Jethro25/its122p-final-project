@@ -109,3 +109,10 @@
         setStat("stat-report-resolved", mine.filter(r => ["Resolved", "Approved", "Rejected", "Dismissed"].includes(r.status)).length);
     } else ["stat-report-pending", "stat-report-review", "stat-report-resolved"].forEach(id => setStat(id, "—"));
 })();
+
+/* Sign out of every device: the server ends all of this account's sessions */
+document.getElementById("logout-all-button")?.addEventListener("click", async () => {
+    if (!confirm("Log out of Librowse on every computer and phone, including this one?")) return;
+    if (window.librowseAuth?.logoutAll) await window.librowseAuth.logoutAll();
+    window.location.replace("login.html");
+});

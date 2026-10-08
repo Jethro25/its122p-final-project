@@ -187,11 +187,20 @@ try {
                 }
                 $body['managed_by_admin_id'] = (int) $adminId;
             } else {
-                $body['managed_by_admin_id'] = (int) ($body['managed_by_admin_id'] ?? $authenticatedUser['user_id']);
+                // Never trust an ID sent by the browser: the signed-in admin owns it
+                $body['managed_by_admin_id'] = (int) $authenticatedUser['user_id'];
             }
 
-            $created = $crud->create($body);
-            save_category_map($pdo, (int) $created['book_id'], $categoryIds);
+            // Book row + its category links are saved together, or not at all
+            $pdo->beginTransaction();
+            try {
+                $created = $crud->create($body);
+                save_category_map($pdo, (int) $created['book_id'], $categoryIds);
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
+            }
             $created['category_ids'] = $categoryIds;
 
             Response::json($created, 201);
@@ -213,13 +222,19 @@ try {
                 $body['category_id'] = $categoryIds[0];
             }
 
-            $updated = $crud->update($id, $body);
+            $pdo->beginTransaction();
+            try {
+                $updated = $crud->update($id, $body);
+                if ($updated !== null && $categoryIds !== null) {
+                    save_category_map($pdo, (int) $id, $categoryIds);
+                }
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
+            }
             if ($updated === null) {
                 Response::error("Record with book_id = {$id} not found.", 404);
-            }
-
-            if ($categoryIds !== null) {
-                save_category_map($pdo, (int) $id, $categoryIds);
             }
             $categoryMap = fetch_category_ids($pdo, [$id]);
             $updated['category_ids'] = $categoryMap[(int) $id] ?? [(int) $updated['category_id']];

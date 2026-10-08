@@ -4,11 +4,20 @@
  */
 class Response
 {
+    /** Optional hook run just before a reply is sent (used by idempotency.php to remember replies). */
+    public static $beforeSend = null;
+
     public static function json($data, int $statusCode = 200): void
     {
+        $body = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if (is_callable(self::$beforeSend)) {
+            $hook = self::$beforeSend;
+            self::$beforeSend = null;          // run once
+            $hook($statusCode, $body);
+        }
         http_response_code($statusCode);
         header('Content-Type: application/json');
-        echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        echo $body;
         exit;
     }
 

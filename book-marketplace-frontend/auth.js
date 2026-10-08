@@ -510,6 +510,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         showMessage("Signed out. You may now log in with another account.", "info");
     });
 
+    const signoutReason = sessionStorage.getItem("librowseSignoutReason");
+    if (signoutReason) {
+        sessionStorage.removeItem("librowseSignoutReason");
+        if (signoutReason === "idle") showMessage("You were signed out after a period of inactivity, to protect your account. Please sign in again.", "info");
+    }
+
     document.getElementById("login-form")?.addEventListener("submit", handleLogin);
     initLoginLockState();
     initUnlockRequest();

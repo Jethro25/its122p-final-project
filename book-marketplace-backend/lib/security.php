@@ -2,12 +2,21 @@
 declare(strict_types=1);
 
 /**
- * Server-side session management backed by the database.
- * Replaces the XML file-based approach which doesn't work on Vercel
- * (read-only filesystem). Sessions are stored in SYSTEM_RECORDS table
- * using the existing schema — no backend changes needed.
+ * Server-side session management backed by the database
+ * (LIBROWSE_SESSIONS table; works on Vercel's read-only filesystem).
+ *
+ * The browser only holds a random token. The server stores a SHA-256 hash
+ * of it plus the user, role and times, and decides on EVERY request whether
+ * the session is still valid. The browser can show a warning, but the
+ * server is the one that ends a session.
+ *
+ * Two timeouts (both set in lib/config.php):
+ *   • Idle timeout     — no user activity for SESSION_IDLE_MINUTES (default 30).
+ *   • Absolute timeout — SESSION_MAX_HOURS after sign-in (default 8), even if active.
+ *
+ * "Activity" = a request the user caused. Background auto-refresh requests
+ * send `X-Librowse-Background: 1` and do NOT keep the session alive.
  */
-const LIBROWSE_SESSION_TTL = 28800; // 8 hours
 
 function ensure_sessions_table(PDO $pdo): void
 {
@@ -28,6 +37,7 @@ function ensure_sessions_table(PDO $pdo): void
         // Table may already exist or no permission — continue
     }
     ensure_column($pdo, 'LIBROWSE_SESSIONS', 'revoked_at');
+    ensure_column($pdo, 'LIBROWSE_SESSIONS', 'last_seen_at');
     ensure_column($pdo, 'USER', 'deleted_at');
 }
 
@@ -44,8 +54,8 @@ function issue_auth_token(array $user): string
     // Expired sessions are kept for logging; they simply stop working.
 
     $stmt = $pdo->prepare(
-        "INSERT INTO `LIBROWSE_SESSIONS` (token_hash, user_id, role, created_at, expires_at)
-         VALUES (:hash, :user_id, :role, :created_at, :expires_at)
+        "INSERT INTO `LIBROWSE_SESSIONS` (token_hash, user_id, role, created_at, expires_at, last_seen_at)
+         VALUES (:hash, :user_id, :role, :created_at, :expires_at, :seen)
          ON DUPLICATE KEY UPDATE expires_at = :expires_at2, revoked_at = NULL"
     );
     $stmt->execute([
@@ -55,6 +65,7 @@ function issue_auth_token(array $user): string
         'created_at'  => $now->format('Y-m-d H:i:s'),
         'expires_at'  => $expires->format('Y-m-d H:i:s'),
         'expires_at2' => $expires->format('Y-m-d H:i:s'),
+        'seen'        => $now->format('Y-m-d H:i:s'),
     ]);
 
     return $token;
@@ -84,14 +95,41 @@ function lookup_authenticated_user(PDO $pdo): ?array
     $hash = hash('sha256', $token);
 
     $stmt = $pdo->prepare(
-        "SELECT user_id, role FROM `LIBROWSE_SESSIONS`
-         WHERE token_hash = :hash AND expires_at > UTC_TIMESTAMP() AND revoked_at IS NULL
-         LIMIT 1"
+        "SELECT user_id, role, revoked_at,
+                TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), expires_at) AS max_left,
+                TIMESTAMPDIFF(SECOND, COALESCE(last_seen_at, created_at), UTC_TIMESTAMP()) AS idle_for
+         FROM `LIBROWSE_SESSIONS` WHERE token_hash = :hash LIMIT 1"
     );
     $stmt->execute(['hash' => $hash]);
     $session = $stmt->fetch();
 
-    if (!$session) return null;
+    if (!$session || $session['revoked_at'] !== null) return null;
+
+    // Absolute timeout: the session has reached its maximum lifetime
+    if ((int) $session['max_left'] <= 0) return null;
+
+    // Idle timeout: decided here on the server, not by a browser timer
+    if ((int) $session['idle_for'] >= LIBROWSE_IDLE_TIMEOUT) {
+        $pdo->prepare('UPDATE `LIBROWSE_SESSIONS` SET revoked_at = UTC_TIMESTAMP() WHERE token_hash = :hash AND revoked_at IS NULL')
+            ->execute(['hash' => $hash]);
+        log_event('session_idle_timeout', (int) $session['user_id'], ['idle_minutes' => intdiv((int) $session['idle_for'], 60)]);
+        $GLOBALS['librowse_session_expired_reason'] = 'idle';
+        return null;
+    }
+
+    // A real user action resets the idle timer; background auto-refresh does not
+    $background = ($_SERVER['HTTP_X_LIBROWSE_BACKGROUND'] ?? '') === '1';
+    $idleLeft = LIBROWSE_IDLE_TIMEOUT - (int) $session['idle_for'];
+    if (!$background) {
+        $pdo->prepare('UPDATE `LIBROWSE_SESSIONS` SET last_seen_at = UTC_TIMESTAMP() WHERE token_hash = :hash')
+            ->execute(['hash' => $hash]);
+        $idleLeft = LIBROWSE_IDLE_TIMEOUT;
+    }
+    // Lets the page warn "your session will expire in 2 minutes" (display only)
+    if (!headers_sent()) {
+        header('X-Session-Idle-Remaining: ' . min($idleLeft, (int) $session['max_left']));
+        header('X-Session-Max-Remaining: ' . (int) $session['max_left']);
+    }
 
     $stmt2 = $pdo->prepare(
         'SELECT user_id, username, email, role, status, permission
@@ -116,8 +154,24 @@ function lookup_authenticated_user(PDO $pdo): ?array
 function require_authenticated_user(PDO $pdo, array $allowedRoles = []): array
 {
     $user = current_authenticated_user($pdo);
-    if ($user === null) Response::error('Authentication required or session expired.', 401);
+    if ($user === null) {
+        // 401 = not authenticated (no session, or it expired / was signed out)
+        $idle = ($GLOBALS['librowse_session_expired_reason'] ?? '') === 'idle';
+        Response::error(
+            $idle ? 'You were signed out after a period of inactivity. Please sign in again.'
+                  : 'Authentication required or session expired.',
+            401,
+            ['reason' => $idle ? 'idle_timeout' : 'unauthenticated']
+        );
+    }
     if ($allowedRoles && !in_array($user['role'], $allowedRoles, true)) {
+        // 403 = signed in, but this role may not do this. Logged for monitoring.
+        log_event('permission_denied', (int) $user['user_id'], [
+            'role'     => $user['role'],
+            'needs'    => $allowedRoles,
+            'method'   => $_SERVER['REQUEST_METHOD'] ?? '',
+            'endpoint' => basename((string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH)),
+        ], 'warning');
         Response::error('You are not authorized to perform this action.', 403);
     }
     return $user;
@@ -131,4 +185,20 @@ function revoke_auth_token(?string $token): void
     $hash = hash('sha256', $token);
     $stmt = $pdo->prepare("UPDATE `LIBROWSE_SESSIONS` SET revoked_at = UTC_TIMESTAMP() WHERE token_hash = :hash AND revoked_at IS NULL");
     $stmt->execute(['hash' => $hash]);
+}
+
+/** Signs a user out everywhere (all devices / browsers). Returns how many sessions ended. */
+function revoke_all_sessions_for_user(int $userId, ?string $exceptToken = null): int
+{
+    global $pdo;
+    ensure_sessions_table($pdo);
+    $sql = 'UPDATE `LIBROWSE_SESSIONS` SET revoked_at = UTC_TIMESTAMP() WHERE user_id = :uid AND revoked_at IS NULL';
+    $params = ['uid' => $userId];
+    if ($exceptToken) {
+        $sql .= ' AND token_hash <> :keep';
+        $params['keep'] = hash('sha256', $exceptToken);
+    }
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->rowCount();
 }

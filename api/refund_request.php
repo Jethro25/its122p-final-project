@@ -39,6 +39,7 @@ try {
 
     if ($method === 'POST') {
         if (!$isCustomer) Response::error('Refunds are requested by customers.', 403);
+        idempotency_begin($pdo, $me, 'refund_request');
         $body = request_body();
         $txId = (int) ($body['transaction_id'] ?? 0);
         $reason = trim((string) ($body['reason'] ?? ''));
@@ -56,12 +57,14 @@ try {
         $dup->execute(['id' => $txId]);
         if ((int) $dup->fetchColumn() > 0) Response::error('A refund for this purchase is already open or approved.', 409);
 
-        Response::json($crud->create([
+        $created = $crud->create([
             'transaction_id' => $txId,
             'customer_id'    => $me,
             'reason'         => $reason,
             'status'         => 'Pending',
-        ]), 201);
+        ]);
+        log_event('refund_requested', $me, ['refund_id' => (int) $created['refund_id'], 'transaction_id' => $txId]);
+        Response::json($created, 201);
     }
 
     if ($method === 'PUT' || $method === 'PATCH') {
@@ -73,7 +76,15 @@ try {
         if ($to === $row['status']) Response::json($row);
         if ($row['status'] !== 'Pending') Response::error('This refund has already been decided.', 422);
         if (!in_array($to, ['Approved', 'Rejected'], true)) Response::error('Choose Approved or Rejected.', 422);
-        Response::json($crud->update($id, ['status' => $to, 'processed_by_staff_id' => $me]));
+        // Decide it only if it is still Pending — two staff clicking at once can't both decide it
+        $upd = $pdo->prepare("UPDATE `REFUND_REQUEST` SET status = :to, processed_by_staff_id = :me
+                              WHERE refund_id = :id AND status = 'Pending' AND deleted_at IS NULL");
+        $upd->execute(['to' => $to, 'me' => $me, 'id' => $id]);
+        if ($upd->rowCount() !== 1) {
+            Response::error('This refund was just decided by someone else. Refresh to see the latest status.', 409, ['current' => $crud->show($id)]);
+        }
+        log_event('refund_decided', $me, ['refund_id' => $id, 'decision' => $to], $to === 'Approved' ? 'warning' : 'info');
+        Response::json($crud->show($id));
     }
 
     if ($method === 'DELETE') {

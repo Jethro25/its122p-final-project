@@ -83,5 +83,6 @@ function dispatch_crud_request(Crud $crud, string $primaryKeyName): void
 
 function read_json_body(): array
 {
-    return request_body();
+    // An endpoint may replace fields the server must decide itself (e.g. who created it)
+    return $GLOBALS['librowse_body_override'] ?? request_body();
 }

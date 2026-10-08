@@ -313,6 +313,8 @@ function normalize_listing_price(string $type, $price): ?string
 
 try {
     if ($method === 'POST' && !isset($_GET['action'])) {
+        // Double click on "List book" → one listing, not two
+        idempotency_begin($pdo, (int) $authUser['user_id'], 'user_books');
         $isCustomer = !is_staff_or_admin($authUser);
         $type = (string) ($payload['listing_type'] ?? '');
         if (!in_array($type, ['For_sale', 'For_trade', 'Both'], true)) {

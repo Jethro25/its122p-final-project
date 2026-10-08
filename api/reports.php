@@ -49,6 +49,7 @@ try {
     }
 
     if ($method === 'POST') {
+        idempotency_begin($pdo, $me, 'reports');
         $body = request_body();
         $formData = $body['form_data'] ?? null;
         if (is_array($formData)) $formData = json_encode($formData, JSON_UNESCAPED_UNICODE);
@@ -80,7 +81,9 @@ try {
             if (text_length($notes) > 2000) Response::error('Please keep the notes under 2000 characters.', 422);
             $update['resolution_notes'] = $notes === '' ? null : $notes;
         }
-        Response::json($crud->update($id, $update));
+        $updated = $crud->update($id, $update);
+        log_event('report_reviewed', $me, ['report_id' => $id, 'status' => $updated['status'] ?? null]);
+        Response::json($updated);
     }
 
     if ($method === 'DELETE') {
