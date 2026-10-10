@@ -127,7 +127,9 @@ if ($method === 'GET' && ($_GET['action'] ?? '') === 'cover') {
 
 /* Book lists: every column except the photo itself, plus has_cover / cover_v */
 if ($method === 'GET') {
-    require_authenticated_user($pdo);
+    // Listings are the public shop window: readable signed out. Only the
+    // columns selected below are exposed, never a seller's contact details.
+    current_authenticated_user($pdo);
     $where = ['deleted_at IS NULL'];
     $params = [];
     foreach (['seller_id', 'book_id', 'status', 'listing_type'] as $col) {

@@ -22,7 +22,11 @@ $crud = new Crud(
 
 
 $method = $_SERVER['REQUEST_METHOD'];
-$authenticatedUser = require_authenticated_user($pdo);
+// The catalog (title, author, ISBN, categories) is public so visitors can
+// browse before signing in. Every write below still demands a signed-in role.
+$authenticatedUser = $method === 'GET'
+    ? current_authenticated_user($pdo)
+    : require_authenticated_user($pdo);
 
 /**
  * Normalizes whatever the client sent for categories into a clean,

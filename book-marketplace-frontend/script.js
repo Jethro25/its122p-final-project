@@ -380,10 +380,13 @@ async function loadBooks() {
         if (bookList) {
             bookList.innerHTML = `<tr class="loading-row"><td colspan="10"><span class="inline-spinner" aria-hidden="true"></span> Loading books…</td></tr>`;
         }
+        // Listings and the catalog are public; the member list is not, so a
+        // signed-out visitor browses without it and simply sees no seller names.
+        const signedIn = Boolean(sessionStorage.getItem(SESSION_TOKEN_KEY));
         const results = await Promise.all([
             apiRequest("user_books.php"),
             apiRequest("books_catalog.php"),
-            apiRequest("user.php")
+            signedIn ? apiRequest("user.php") : Promise.resolve([])
         ]);
         bookListings = results[0];
         booksCatalog = results[1];
