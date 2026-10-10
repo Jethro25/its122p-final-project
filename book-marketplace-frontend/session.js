@@ -4,7 +4,11 @@
     const TOKEN_KEY = "librowseSessionToken";
     const USER_KEY = "librowseCurrentUser";
 
-    document.documentElement.classList.add("librowse-auth-pending");
+    // Pages marked data-public-page are readable signed out: never redirect away
+    // from them, and never hide them behind the session-check splash.
+    const IS_PUBLIC_PAGE = document.documentElement.getAttribute("data-public-page") === "true";
+
+    if (!IS_PUBLIC_PAGE) document.documentElement.classList.add("librowse-auth-pending");
     const style = document.createElement("style");
     style.textContent = [
         'html.librowse-auth-pending body{visibility:hidden!important}',
@@ -21,6 +25,7 @@
     /* Visible "loading" screen while the session is checked (the page itself
        stays hidden so nobody sees content they aren't allowed to see). */
     function showBoot(message, withRetry) {
+        if (IS_PUBLIC_PAGE) return;
         let boot = document.getElementById('librowse-boot');
         if (!boot) {
             boot = document.createElement('div');
@@ -56,8 +61,11 @@
     }
 
     async function validateSession(redirect = true) {
-        document.documentElement.classList.add("librowse-auth-pending");
-        document.documentElement.classList.remove("librowse-auth-ready");
+        if (IS_PUBLIC_PAGE) redirect = false;
+        if (!IS_PUBLIC_PAGE) {
+            document.documentElement.classList.add("librowse-auth-pending");
+            document.documentElement.classList.remove("librowse-auth-ready");
+        }
         showBoot('Opening Librowse…');
         const token = getToken();
         if (!token) {
@@ -83,6 +91,7 @@
             // Can't reach the server: keep the session and offer a retry
             // instead of logging the person out.
             if (error instanceof TypeError) {
+                if (IS_PUBLIC_PAGE) return null;
                 showBoot("We couldn't reach Librowse. Check your connection and try again.", true);
                 return null;
             }
@@ -281,6 +290,10 @@
     }
 
     window.librowseAuth = { API_BASE, getToken, getUser, saveSession, clearSession, validateSession, requireRole, logout, logoutAll };
+    if (IS_PUBLIC_PAGE) {
+        document.documentElement.classList.remove("librowse-auth-pending");
+        document.documentElement.classList.add("librowse-auth-ready");
+    }
     window.librowseAuthReady = validateSession(true);
 
     window.addEventListener("pageshow", function (event) {

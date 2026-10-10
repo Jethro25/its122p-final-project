@@ -487,16 +487,15 @@ async function handleRegister(event) {
                         `<br><small style="opacity:.8">🔧 Dev mode — <a href="${escapeHTML(data.dev_preview_link)}" target="_blank" style="color:inherit;text-decoration:underline">click here to verify</a></small>`
                     );
                 }
+                return;   // stay so the verification link stays clickable
             }
+            setTimeout(() => window.location.replace("login.html"), 2500);
             return;
         }
 
-        // Legacy / fallback: auto-login if server responded with a token
-        if (data.token && data.user) {
-            saveCurrentUser(data.user, data.token);
-            showMessage("Account created successfully! Redirecting...", "success");
-            setTimeout(() => window.location.replace("customer-dashboard.html"), 250);
-        }
+        // Fallback: the server did not ask for verification — send them to sign in
+        showMessage("Account created successfully! Taking you to sign in…", "success");
+        setTimeout(() => window.location.replace("login.html"), 1500);
     } catch (error) {
         showMessage(`Registration failed: ${error.message}`, "error");
     } finally {

@@ -120,7 +120,10 @@ ensure_column($pdo, 'USER_BOOKS', 'deleted_at');   // a fresh database may not h
 // When a Pending request stops holding the book (only set for new requests,
 // so older data is never cancelled by surprise)
 ensure_column($pdo, 'TRANSACTIONS', 'reserved_until');
-expire_stale_reservations($pdo);
+// Housekeeping only — it costs a transaction per stale row, which on a remote
+// database is enough to push a write past the request timeout. A read does the
+// sweep, so expired rows are still cleared promptly.
+if ($method === 'GET') expire_stale_reservations($pdo);
 
 try {
     /* ── GET ─────────────────────────────────────────────────────────── */

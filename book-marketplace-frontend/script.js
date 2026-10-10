@@ -233,9 +233,13 @@ async function apiRequest(endpoint, options = {}) {
 
     const controller = new AbortController();
 
+    /* Serverless cold starts plus a remote database cost several seconds before
+       any query runs, so a write needs a far longer window than a read. */
+    const isWrite = String(options.method || "GET").toUpperCase() !== "GET";
+
     const timeoutId = setTimeout(function () {
         controller.abort();
-    }, 8000);
+    }, isWrite ? 30000 : 15000);
 
     try {
 
