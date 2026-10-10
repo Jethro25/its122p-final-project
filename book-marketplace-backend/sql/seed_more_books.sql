@@ -18,7 +18,7 @@ CREATE TEMPORARY TABLE `_seed_books` (
     `listing_type` ENUM('For_trade','For_sale','Both') NOT NULL,
     `price`        DECIMAL(10,2) NULL,
     `condition`    ENUM('New','Good','Acceptable') NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+);
 
 INSERT INTO `_seed_books`
     (`isbn`, `title`, `author`, `category_id`, `seller_id`, `listing_type`, `price`, `condition`)
