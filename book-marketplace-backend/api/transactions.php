@@ -233,12 +233,18 @@ try {
             Response::error("A transaction can't go from {$from} to {$to}.", 422);
         }
 
+        // Staff cannot Accept a purchase that hasn't been paid yet
+        if (!$isCustomer && $to === 'Accepted' && $tx['transaction_type'] === 'Purchase') {
+            $payStatus = (string) ($tx['payment_status'] ?? 'Not_required');
+            if ($payStatus === 'Unpaid') {
+                Response::error("This purchase hasn't been paid yet. Wait for the buyer to complete payment before accepting.", 422);
+            }
+        }
+
         $listingIds = array_filter([(int) $tx['requested_inventory_id'], (int) ($tx['offered_inventory_id'] ?? 0)]);
         $pdo->beginTransaction();
         try {
-            /* Only change it if it is STILL in the status this user saw.
-               If another staff member (or the reservation timer) changed it
-               a moment ago, nothing is overwritten. */
+            /* Only change it if it is STILL in the status this user saw. */
             $sql = 'UPDATE `TRANSACTIONS` SET status = :to' . ($isCustomer ? '' : ', managed_by_staff_id = :staff')
                  . ' WHERE transaction_id = :id AND status = :from AND deleted_at IS NULL';
             $params = ['to' => $to, 'id' => $id, 'from' => $from];
@@ -259,6 +265,38 @@ try {
                 set_listing_status($pdo, $listingIds, $tx['transaction_type'] === 'Trade' ? 'Traded' : 'Sold', ['In_transaction', 'Available']);
             } elseif ($to === 'Cancelled') {
                 set_listing_status($pdo, $listingIds, 'Available', ['In_transaction']);
+
+                // Auto-refund if the purchase was paid and it's being cancelled
+                $payStatus = (string) ($tx['payment_status'] ?? 'Not_required');
+                if ($tx['transaction_type'] === 'Purchase' && $payStatus === 'Paid') {
+                    try {
+                        $payStmt = $pdo->prepare("SELECT * FROM `PAYMENTS` WHERE transaction_id = :id AND status = 'Captured' LIMIT 1");
+                        $payStmt->execute(['id' => $id]);
+                        $payRow = $payStmt->fetch();
+                        if ($payRow && !empty($payRow['capture_id'])) {
+                            $idemKey = 'librowse-refund-' . $id . '-' . $payRow['capture_id'];
+                            $refResult = paypal_refund_capture(
+                                (string) $payRow['capture_id'],
+                                (float) $payRow['amount'],
+                                (string) ($payRow['currency'] ?: 'PHP'),
+                                $idemKey
+                            );
+                            $pdo->prepare("UPDATE `PAYMENTS` SET status = 'Refunded', refund_id = :rid, updated_at = UTC_TIMESTAMP() WHERE payment_id = :pid")
+                                ->execute(['rid' => $refResult['refund_id'], 'pid' => (int) $payRow['payment_id']]);
+                            $pdo->prepare("UPDATE `TRANSACTIONS` SET payment_status = 'Refunded' WHERE transaction_id = :tid")
+                                ->execute(['tid' => $id]);
+                            log_event('payment_refunded', $me, [
+                                'transaction_id' => $id,
+                                'refund_id'      => $refResult['refund_id'],
+                                'via'            => 'cancellation',
+                            ], 'warning');
+                        }
+                    } catch (RuntimeException $e) {
+                        // Log but continue — cancellation itself still goes through
+                        error_log('[librowse/transactions] auto-refund on cancel failed: ' . $e->getMessage());
+                        log_event('payment_refund_failed', $me, ['transaction_id' => $id, 'error' => $e->getMessage()], 'critical');
+                    }
+                }
             }
             $pdo->commit();
         } catch (Throwable $e) {

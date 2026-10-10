@@ -16,13 +16,15 @@
       ]
     },
     {
-      "source": "/(admin|staff|customer-dashboard|dashboard|transactions|list-book|support|browse)\\.html",
+      "source": "/(admin|staff|customer-dashboard|dashboard|transactions|list-book|support|browse|checkout)\\.html",
       "headers": [
         { "key": "Cache-Control", "value": "no-store, max-age=0" }
       ]
     }
   ],
   "rewrites": [
+    { "source": "/robots.txt", "destination": "/api/robots.php" },
+    { "source": "/sitemap.xml", "destination": "/api/sitemap.php" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/", "destination": "/book-marketplace-frontend/index.html" },
     { "source": "/((?!api/).*)", "destination": "/book-marketplace-frontend/$1" }

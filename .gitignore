@@ -1,0 +1,24 @@
+# Environment files — never commit secrets
+.env
+.env.*
+!.env.example
+
+# PHP composer
+vendor/
+
+# Editor directories
+.vscode/
+.idea/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Agent guidelines (not tracked)
+.agent/
+.agents/
+AGENTS.md
+GEMINI.md
+
+# Local mail log written by the dev-mode mailer
+librowse_mail.log

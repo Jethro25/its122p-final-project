@@ -396,6 +396,14 @@ async function handleLogin(event) {
             setLoginLocked(true, identifier);
             return;
         }
+        if (data.unverified) {
+            showMessage(
+                (data.error || "Please verify your email before signing in.") +
+                ` <a href="forgot-password.html?resend=1&email=${encodeURIComponent(data.email || identifier)}" style="color:inherit;font-weight:bold;text-decoration:underline">Resend verification email</a>`,
+                "error"
+            );
+            return;
+        }
         if (!response.ok) {
             if (data.attempts_used) {
                 showAttemptWarning(data.attempts_used, data.max_attempts || 3, !!data.final_warning);
@@ -463,9 +471,32 @@ async function handleRegister(event) {
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Registration failed.");
-        saveCurrentUser(data.user, data.token);
-        showMessage("Account created successfully! Redirecting...", "success");
-        setTimeout(() => window.location.replace("customer-dashboard.html"), 250);
+
+        // New flow: account needs email verification before sign-in
+        if (data.verify_email) {
+            const form = document.getElementById("register-form");
+            if (form) form.style.display = "none";
+            showMessage(
+                data.message || "Account created! Please check your email to verify your account before signing in.",
+                "success"
+            );
+            if (data.dev_mode && data.dev_preview_link) {
+                const msg = document.getElementById("auth-message");
+                if (msg) {
+                    msg.insertAdjacentHTML("beforeend",
+                        `<br><small style="opacity:.8">🔧 Dev mode — <a href="${escapeHTML(data.dev_preview_link)}" target="_blank" style="color:inherit;text-decoration:underline">click here to verify</a></small>`
+                    );
+                }
+            }
+            return;
+        }
+
+        // Legacy / fallback: auto-login if server responded with a token
+        if (data.token && data.user) {
+            saveCurrentUser(data.user, data.token);
+            showMessage("Account created successfully! Redirecting...", "success");
+            setTimeout(() => window.location.replace("customer-dashboard.html"), 250);
+        }
     } catch (error) {
         showMessage(`Registration failed: ${error.message}`, "error");
     } finally {

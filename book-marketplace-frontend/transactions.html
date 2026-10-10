@@ -18,7 +18,8 @@
         <a href="browse.html">Browse Books</a>
         <a href="list-book.html">List a Book</a>
         <a href="customer-dashboard.html">Dashboard</a>
-        <a href="support.html">Refund &amp; Report</a>
+        <a href="refund.html">Refund</a>
+            <a href="report.html">Report</a>
     </nav>
     <div id="auth-status" class="auth-status">
         <a href="login.html">Sign in</a>
@@ -48,6 +49,7 @@
                         <th>Type</th>
                         <th>Amount</th>
                         <th>Status</th>
+                        <th>Payment</th>
                         <th>Your part</th>
                         <th>Action</th>
                     </tr>
@@ -58,7 +60,7 @@
 
                     <tr>
 
-                        <td colspan="7"><span class="inline-spinner" aria-hidden="true"></span> Loading your transactions…</td>
+                        <td colspan="8"><span class="inline-spinner" aria-hidden="true"></span> Loading your transactions…</td>
 
                     </tr>
 
@@ -73,5 +75,21 @@
     <p>ITS122P Final Project</p>
 </footer>
 <script src="script.js"></script>
+
+<!-- Feedback modal (loaded inline so it works without a framework) -->
+<div id="feedback-modal-container"></div>
+<script>
+fetch('feedback-modal.html').then(r=>r.text()).then(html=>{
+    document.getElementById('feedback-modal-container').innerHTML=html;
+    // Attach "Leave Feedback" buttons on Completed rows after the page renders
+    document.addEventListener('librowse:transactions-loaded', function() {
+        document.querySelectorAll('.feedback-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (window.openFeedbackModal) window.openFeedbackModal({ transactionId: Number(this.dataset.txId) });
+            });
+        });
+    });
+});
+</script>
 </body>
 </html>

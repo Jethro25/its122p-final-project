@@ -83,6 +83,52 @@ try {
         if ($upd->rowCount() !== 1) {
             Response::error('This refund was just decided by someone else. Refresh to see the latest status.', 409, ['current' => $crud->show($id)]);
         }
+
+        // If approving a paid purchase, automatically issue a PayPal refund
+        if ($to === 'Approved') {
+            $txStmt = $pdo->prepare(
+                "SELECT t.transaction_id, t.payment_status, p.capture_id, p.amount, p.currency, p.payment_id
+                 FROM `TRANSACTIONS` t
+                 LEFT JOIN `PAYMENTS` p ON p.transaction_id = t.transaction_id AND p.status = 'Captured'
+                 WHERE t.transaction_id = :tid AND t.deleted_at IS NULL LIMIT 1"
+            );
+            $txStmt->execute(['tid' => (int) $row['transaction_id']]);
+            $txRow = $txStmt->fetch();
+            if ($txRow && $txRow['payment_status'] === 'Paid' && !empty($txRow['capture_id'])) {
+                try {
+                    $idemKey = 'librowse-refund-' . $txRow['transaction_id'] . '-' . $txRow['capture_id'];
+                    $refResult = paypal_refund_capture(
+                        (string) $txRow['capture_id'],
+                        (float) $txRow['amount'],
+                        (string) ($txRow['currency'] ?: 'PHP'),
+                        $idemKey
+                    );
+                    $pdo->prepare(
+                        "UPDATE `PAYMENTS` SET status = 'Refunded', refund_id = :rid, updated_at = UTC_TIMESTAMP()
+                         WHERE payment_id = :pid"
+                    )->execute(['rid' => $refResult['refund_id'], 'pid' => (int) $txRow['payment_id']]);
+                    $pdo->prepare(
+                        "UPDATE `TRANSACTIONS` SET payment_status = 'Refunded' WHERE transaction_id = :tid"
+                    )->execute(['tid' => (int) $txRow['transaction_id']]);
+                    log_event('payment_refunded', $me, [
+                        'transaction_id' => (int) $txRow['transaction_id'],
+                        'refund_id'      => $refResult['refund_id'],
+                        'via'            => 'refund_request_approval',
+                    ], 'warning');
+                } catch (RuntimeException $e) {
+                    // Log but don't fail — staff sees a warning in the response
+                    error_log('[librowse/refund] PayPal refund failed: ' . $e->getMessage());
+                    log_event('payment_refund_failed', $me, [
+                        'transaction_id' => (int) $txRow['transaction_id'],
+                        'error'          => $e->getMessage(),
+                    ], 'critical');
+                    $current = $crud->show($id);
+                    $current['_paypal_refund_warning'] = 'Refund approved in Librowse, but the PayPal refund failed: ' . $e->getMessage() . '. Please process it manually in the PayPal dashboard.';
+                    Response::json($current);
+                }
+            }
+        }
+
         log_event('refund_decided', $me, ['refund_id' => $id, 'decision' => $to], $to === 'Approved' ? 'warning' : 'info');
         Response::json($crud->show($id));
     }

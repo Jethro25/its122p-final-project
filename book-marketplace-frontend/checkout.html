@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&family=Courier+Prime:wght@400;700&display=swap">
+    <link rel="stylesheet" href="style.css">
+    <title>Checkout - Librowse</title>
+    <style>
+        .checkout-card {
+            max-width: 480px;
+            margin: 40px auto;
+            padding: 32px;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,.08);
+        }
+        .checkout-summary { border: 1px solid #eee; border-radius: 10px; padding: 20px; margin-bottom: 24px; }
+        .checkout-summary h3 { margin: 0 0 12px; color: #5a3e2b; font-size: 15px; }
+        .checkout-summary .row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 14px; }
+        .checkout-summary .total { font-weight: 700; font-size: 18px; border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px; }
+        .countdown { text-align: center; font-size: 13px; color: #e74c3c; font-weight: 600; margin-bottom: 16px; }
+        .simulated-panel { border: 2px dashed #8b5e3c; border-radius: 12px; padding: 24px; text-align: center; }
+        .simulated-panel .sim-label { background: #8b5e3c; color: #fff; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; display: inline-block; margin-bottom: 12px; letter-spacing: .05em; }
+        .sim-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+        .btn-approve { background: #27ae60; color: #fff; border: none; padding: 14px; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; }
+        .btn-decline { background: #e74c3c; color: #fff; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .btn-cancel-pay { background: none; border: 1px solid #ccc; padding: 12px; border-radius: 8px; font-size: 14px; cursor: pointer; color: #777; }
+        #paypal-button-container { margin-top: 8px; }
+        .result-state { text-align: center; padding: 32px 0; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Librowse Book Exchange</h1>
+        <nav>
+            <a href="index.html">Marketplace</a>
+            <a href="transactions.html">My Orders</a>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Loading -->
+        <div id="state-loading" class="checkout-card" style="text-align:center;padding:48px;">
+            <div class="loading-spinner" style="margin:0 auto 16px;" aria-label="Loading…"></div>
+            <p style="color:#777;">Loading your order…</p>
+        </div>
+
+        <!-- Error -->
+        <div id="state-error" class="checkout-card" style="display:none;">
+            <div class="result-state">
+                <div style="font-size:48px;margin-bottom:16px;">❌</div>
+                <h2 style="color:#e74c3c;margin-top:0;" id="error-heading">Something went wrong</h2>
+                <p id="error-msg"></p>
+                <a href="transactions.html" style="color:#8b5e3c;font-weight:600;">View my orders</a>
+            </div>
+        </div>
+
+        <!-- Checkout form -->
+        <div id="state-checkout" class="checkout-card" style="display:none;">
+            <h2 style="margin-top:0;color:#5a3e2b;">Complete your purchase</h2>
+
+            <div class="checkout-summary">
+                <h3>Order summary</h3>
+                <div class="row"><span>Book</span><span id="sum-title">—</span></div>
+                <div class="row"><span>Order #</span><span id="sum-tx-id">—</span></div>
+                <div class="row total"><span>Total</span><span id="sum-amount">—</span></div>
+            </div>
+
+            <div class="countdown" id="countdown-display" style="display:none;"></div>
+
+            <div id="payment-area"></div>
+
+            <div id="checkout-message" class="auth-message" style="display:none;margin-top:16px;"></div>
+        </div>
+
+        <!-- Success -->
+        <div id="state-success" class="checkout-card" style="display:none;">
+            <div class="result-state">
+                <div style="font-size:56px;margin-bottom:12px;">🎉</div>
+                <h2 style="color:#27ae60;margin-top:0;">Payment successful!</h2>
+                <p>Your order has been paid. The seller will be notified and your order is now confirmed.</p>
+                <a href="transactions.html" class="auth-submit-btn" style="display:inline-block;text-decoration:none;padding:12px 28px;border-radius:8px;margin-top:8px;">View my orders</a>
+            </div>
+        </div>
+
+        <!-- Cancelled / declined -->
+        <div id="state-cancelled" class="checkout-card" style="display:none;">
+            <div class="result-state">
+                <div style="font-size:48px;margin-bottom:12px;">❎</div>
+                <h2 style="color:#e74c3c;margin-top:0;" id="cancel-heading">Payment not completed</h2>
+                <p id="cancel-msg">The payment was not completed. Your order is still reserved for a few minutes.</p>
+                <div style="display:flex;gap:12px;justify-content:center;margin-top:16px;flex-wrap:wrap;">
+                    <a href="javascript:location.reload()" style="color:#8b5e3c;font-weight:600;text-decoration:none;border:1px solid #8b5e3c;padding:10px 20px;border-radius:8px;">Try again</a>
+                    <a href="transactions.html" style="color:#777;font-weight:600;text-decoration:none;">View orders</a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer><p>Librowse Book Exchange &copy; 2024 &bull; ITS122P Final Project</p></footer>
+
+    <script>
+    (function () {
+        'use strict';
+
+        function apiBase() {
+            if (window.LIBROWSE_API_BASE) return String(window.LIBROWSE_API_BASE).replace(/\/$/, '');
+            if (window.location.port === '8000') return `${window.location.protocol}//${window.location.hostname}:8000/api`;
+            return '/api';
+        }
+        function authHeaders() {
+            const tok = sessionStorage.getItem('librowseSessionToken');
+            return { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) };
+        }
+        function showState(id) {
+            ['state-loading','state-error','state-checkout','state-success','state-cancelled'].forEach(s => {
+                document.getElementById(s).style.display = s === id ? '' : 'none';
+            });
+        }
+        function showMsg(text, type) {
+            const el = document.getElementById('checkout-message');
+            el.style.display = ''; el.className = 'auth-message ' + (type || 'info'); el.textContent = text;
+        }
+        function hideMsg() { document.getElementById('checkout-message').style.display = 'none'; }
+
+        const params    = new URLSearchParams(window.location.search);
+        const txIdParam = parseInt(params.get('tx') || '0', 10);
+
+        // Countdown timer for checkout window
+        let countdownInterval = null;
+        function startCountdown(expiresAt) {
+            const el = document.getElementById('countdown-display');
+            if (!expiresAt) { el.style.display = 'none'; return; }
+            el.style.display = '';
+            function tick() {
+                const remaining = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
+                if (remaining <= 0) {
+                    el.textContent = 'Your payment window has expired.';
+                    clearInterval(countdownInterval);
+                    setTimeout(() => { showState('state-cancelled'); document.getElementById('cancel-msg').textContent = 'The payment window expired.'; }, 1500);
+                    return;
+                }
+                const m = Math.floor(remaining / 60), s = remaining % 60;
+                el.textContent = `⏱ Pay within ${m}:${s.toString().padStart(2,'0')} — your book is reserved until then.`;
+            }
+            tick();
+            countdownInterval = setInterval(tick, 1000);
+        }
+
+        // ── Capture helper ────────────────────────────────────────────────
+
+        async function capturePayment(orderId, txId) {
+            showMsg('Verifying payment…', 'info');
+            try {
+                const res  = await fetch(apiBase() + '/payments.php?action=capture', {
+                    method: 'POST', headers: authHeaders(),
+                    body: JSON.stringify({ order_id: orderId, transaction_id: txId }),
+                });
+                const data = await res.json();
+                if (res.ok && data.paid) {
+                    clearInterval(countdownInterval);
+                    showState('state-success');
+                } else if (data.already_paid) {
+                    clearInterval(countdownInterval);
+                    showState('state-success');
+                } else {
+                    showMsg(data.error || 'Payment capture failed. Please try again.', 'error');
+                }
+            } catch {
+                showMsg('Connection error during capture. Please try again.', 'error');
+            }
+        }
+
+        // ── SIMULATED mode ─────────────────────────────────────────────────
+
+        function renderSimulated(orderId, txId) {
+            const area = document.getElementById('payment-area');
+            area.innerHTML = `
+                <div class="simulated-panel">
+                    <span class="sim-label">🔧 SIMULATED PAYMENT — No real money</span>
+                    <p style="color:#5a3e2b;font-size:14px;margin:8px 0 0;">
+                        This is a PayPal payment simulation for demonstration purposes.
+                        Choose an outcome below.
+                    </p>
+                    <div class="sim-buttons">
+                        <button class="btn-approve" id="sim-approve">✅ Approve Payment (simulate success)</button>
+                        <button class="btn-decline" id="sim-decline">❌ Decline Payment (simulate failure)</button>
+                        <button class="btn-cancel-pay" id="sim-cancel">Cancel and go back</button>
+                    </div>
+                </div>`;
+
+            document.getElementById('sim-approve').addEventListener('click', async function () {
+                this.disabled = true; this.textContent = 'Processing…';
+                await capturePayment(orderId, txId);
+            });
+
+            document.getElementById('sim-decline').addEventListener('click', function () {
+                clearInterval(countdownInterval);
+                showState('state-cancelled');
+                document.getElementById('cancel-heading').textContent = 'Payment declined';
+                document.getElementById('cancel-msg').textContent = 'The simulated payment was declined. Your order is still reserved.';
+            });
+
+            document.getElementById('sim-cancel').addEventListener('click', function () {
+                clearInterval(countdownInterval);
+                showState('state-cancelled');
+            });
+        }
+
+        // ── SANDBOX mode (real PayPal JS SDK) ──────────────────────────────
+
+        function renderSandbox(clientId, currency, orderId, txId) {
+            const area = document.getElementById('payment-area');
+            area.innerHTML = '<div id="paypal-button-container"></div>';
+
+            const script = document.createElement('script');
+            script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${encodeURIComponent(currency)}`;
+            script.onload = function () {
+                window.paypal.Buttons({
+                    createOrder: function () { return orderId; },
+                    onApprove: async function () { await capturePayment(orderId, txId); },
+                    onCancel: function () {
+                        clearInterval(countdownInterval);
+                        showState('state-cancelled');
+                    },
+                    onError: function (err) {
+                        showMsg('PayPal error: ' + (err.message || String(err)), 'error');
+                    },
+                }).render('#paypal-button-container');
+            };
+            script.onerror = function () {
+                showMsg('Could not load the PayPal SDK. Please check your internet connection.', 'error');
+            };
+            document.head.appendChild(script);
+        }
+
+        // ── Boot ─────────────────────────────────────────────────────────
+
+        async function init() {
+            const user = JSON.parse(sessionStorage.getItem('librowseCurrentUser') || 'null');
+            if (!user) {
+                window.location.replace('login.html?next=checkout.html' + window.location.search);
+                return;
+            }
+            if (!txIdParam) {
+                document.getElementById('error-msg').textContent = 'No order ID in the URL. Go back to the marketplace.';
+                showState('state-error'); return;
+            }
+
+            try {
+                // Fetch PayPal config
+                const cfgRes  = await fetch(apiBase() + '/payments.php?action=config', { headers: authHeaders() });
+                const cfg     = await cfgRes.json();
+
+                // Create a PayPal order (idempotent — returns existing if already created)
+                const createRes = await fetch(apiBase() + '/payments.php?action=create', {
+                    method: 'POST', headers: authHeaders(),
+                    body: JSON.stringify({ transaction_id: txIdParam }),
+                });
+                const order = await createRes.json();
+
+                if (!createRes.ok) {
+                    if (order.already_paid) { showState('state-success'); return; }
+                    document.getElementById('error-msg').textContent = order.error || 'Could not create payment order.';
+                    showState('state-error'); return;
+                }
+
+                // Get transaction details for summary
+                const txRes  = await fetch(apiBase() + '/transactions.php?id=' + txIdParam, { headers: authHeaders(), cache: 'no-store' });
+                const txData = await txRes.json();
+
+                // Fill summary
+                document.getElementById('sum-tx-id').textContent = '#' + txIdParam;
+                document.getElementById('sum-amount').textContent = '₱' + parseFloat(order.amount || txData.amount_paid || 0).toFixed(2);
+                document.getElementById('sum-title').textContent = txData.requested_inventory_id
+                    ? 'Book listing #' + txData.requested_inventory_id : '—';
+
+                // Show countdown if checkout_expires_at is set
+                if (txData.checkout_expires_at) {
+                    startCountdown(txData.checkout_expires_at.replace(' ', 'T') + 'Z');
+                }
+
+                showState('state-checkout');
+
+                if (cfg.mode === 'simulated') {
+                    renderSimulated(order.order_id, txIdParam);
+                } else {
+                    renderSandbox(cfg.client_id, cfg.currency, order.order_id, txIdParam);
+                }
+
+            } catch (err) {
+                document.getElementById('error-msg').textContent = 'Could not connect to the server: ' + err.message;
+                showState('state-error');
+            }
+        }
+
+        init();
+    })();
+    </script>
+</body>
+</html>

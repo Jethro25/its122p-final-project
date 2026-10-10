@@ -11,7 +11,7 @@ CREATE TABLE `USER` (
   `email` VARCHAR(255) NOT NULL,
   `password_hash` VARCHAR(255) NOT NULL,
   `role` ENUM('Customer','Staff','Admin') NOT NULL DEFAULT 'Customer',
-  `status` ENUM('Active','Suspended','Banned','Pending Verification') NOT NULL DEFAULT 'Pending Verification',
+  `status` ENUM('Active','Suspended','Banned','Pending Verification','Locked') NOT NULL DEFAULT 'Pending Verification',
   `permission` JSON DEFAULT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`user_id`)

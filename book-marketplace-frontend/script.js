@@ -1254,31 +1254,24 @@ async function buyBook(listing) {
 
     try {
 
-        await apiRequest(
+        const txCreated = await apiRequest(
             "transactions.php",
             {
-
                 method: "POST",
-
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-
-                body:
-                    JSON.stringify(
-                        transactionData
-                    )
-
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(transactionData)
             }
         );
 
+        // Redirect to checkout for payment
+        const txId = txCreated && txCreated.transaction_id ? txCreated.transaction_id : null;
+        if (txId) {
+            window.location.href = `checkout.html?tx=${txId}`;
+            return;
+        }
 
-        alert(
-            "Purchase request submitted!"
-        );
-
-
+        // Fallback if server didn't return an id
+        alert("Purchase request submitted! Proceed to pay from your Orders page.");
         if (document.getElementById("book-list")) { await loadBooks(); filterBooks(); }
         await loadTransactions();
 
@@ -1444,7 +1437,7 @@ function renderTransactions(transactionData) {
     const list = document.getElementById("transaction-list");
     if (!list) return;
     if (!transactionData.length) {
-        list.innerHTML = `<tr><td colspan="7">No transactions yet. <a href="browse.html">Browse books</a> to buy or trade.</td></tr>`;
+        list.innerHTML = `<tr><td colspan="8">No transactions yet. <a href="browse.html">Browse books</a> to buy or trade.</td></tr>`;
         return;
     }
     const me = Number(currentUser.user_id);
@@ -1455,6 +1448,14 @@ function renderTransactions(transactionData) {
         if (t.transaction_type === "Trade" && t.offered_inventory_id) {
             book += `<div class="tx-sub">in exchange for ${escapeHTML(listingTitle(t.offered_inventory_id))}</div>`;
         }
+        const payStatus = t.payment_status || (t.transaction_type === "Trade" ? "Not_required" : "Not_required");
+        const payBadge = {
+            "Paid":         '<span class="tx-status" style="background:#d4edda;color:#155724;">Paid</span>',
+            "Unpaid":       '<span class="tx-status" style="background:#fff3cd;color:#856404;">Unpaid</span>',
+            "Refunded":     '<span class="tx-status" style="background:#f8d7da;color:#721c24;">Refunded</span>',
+            "Not_required": '<span style="color:#aaa;font-size:12px;">—</span>',
+        }[payStatus] || `<span style="color:#aaa;font-size:12px;">${escapeHTML(payStatus)}</span>`;
+
         const row = document.createElement("tr");
         row.innerHTML = `
             <td>#${escapeHTML(t.transaction_id)}</td>
@@ -1462,21 +1463,43 @@ function renderTransactions(transactionData) {
             <td>${escapeHTML(t.transaction_type)}</td>
             <td>${t.transaction_type === "Trade" ? "—" : escapeHTML(formatPrice(t.amount_paid))}</td>
             <td><span class="tx-status tx-${escapeHTML(String(t.status).toLowerCase())}">${escapeHTML(TX_STATUS_TEXT[t.status] || t.status)}</span></td>
+            <td>${payBadge}</td>
             <td>${iAmBuyer ? "You requested it" : "Request for your book"}</td>
             <td class="transaction-action"></td>`;
         const action = row.querySelector(".transaction-action");
-        if (iAmBuyer && t.status === "Pending") {
+        // "Pay Now" button for unpaid purchases
+        if (iAmBuyer && t.transaction_type === "Purchase" && (t.payment_status === "Unpaid" || (!t.payment_status && t.status === "Pending"))) {
+            const payBtn = document.createElement("a");
+            payBtn.href = `checkout.html?tx=${t.transaction_id}`;
+            payBtn.className = "btn-small";
+            payBtn.style.cssText = "background:#8b5e3c;color:#fff;text-decoration:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;";
+            payBtn.textContent = "💳 Pay Now";
+            action.appendChild(payBtn);
+        } else if (iAmBuyer && t.status === "Pending") {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "btn-small";
             btn.textContent = "Cancel";
             btn.addEventListener("click", () => cancelTransaction(t.transaction_id, btn));
             action.appendChild(btn);
+        } else if (iAmBuyer && t.status === "Completed" && t.transaction_type === "Purchase") {
+            // Offer feedback on completed purchases
+            const fbBtn = document.createElement("button");
+            fbBtn.type = "button";
+            fbBtn.className = "btn-small feedback-btn";
+            fbBtn.dataset.txId = t.transaction_id;
+            fbBtn.textContent = "⭐ Feedback";
+            fbBtn.title = "Leave feedback for this transaction";
+            fbBtn.addEventListener("click", () => {
+                if (window.openFeedbackModal) window.openFeedbackModal({ transactionId: Number(t.transaction_id) });
+            });
+            action.appendChild(fbBtn);
         } else {
             action.textContent = "—";
         }
         list.appendChild(row);
     });
+    document.dispatchEvent(new CustomEvent('librowse:transactions-loaded'));
 }
 
 async function cancelTransaction(transactionId, button) {

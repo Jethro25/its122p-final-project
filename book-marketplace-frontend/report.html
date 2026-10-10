@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&family=Courier+Prime:wght@400;700&display=swap">
+    <link rel="stylesheet" href="style.css">
+    <title>Submit a Report - Librowse</title>
+</head>
+<body>
+    <header>
+        <h1>Librowse Book Exchange</h1>
+        <nav id="main-nav">
+            <a href="index.html">Marketplace</a>
+            <a href="browse.html">Browse Books</a>
+            <a href="customer-dashboard.html">Dashboard</a>
+            <a href="transactions.html">Orders</a>
+            <a href="support.html">Support</a>
+        </nav>
+    </header>
+
+    <main style="max-width:700px;margin:40px auto;padding:0 16px;">
+        <div style="margin-bottom:24px;">
+            <a href="customer-dashboard.html" style="color:var(--accent-brown,#8b5e3c);text-decoration:none;font-size:14px;">&larr; Back to Dashboard</a>
+        </div>
+
+        <section class="auth-card" style="max-width:100%;">
+            <h2 style="margin-top:0;">Submit a Report</h2>
+            <p style="color:var(--text-gray,#777);font-size:14px;margin-bottom:24px;">
+                Use this form to report a listing dispute, a policy violation, or request seller verification.
+                All reports are reviewed by our moderation team.
+            </p>
+
+            <div id="page-message" class="auth-message" style="display:none;"></div>
+
+            <form id="report-form" class="auth-form">
+                <div class="form-group">
+                    <label for="report-category">Report type</label>
+                    <select id="report-category" required
+                        style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;">
+                        <option value="">— Select a type —</option>
+                        <option value="Listing_Dispute">Listing Dispute (wrong item, bad condition)</option>
+                        <option value="User_Violation">User Violation (scam, harassment)</option>
+                        <option value="Seller_Application">Seller Verification Request</option>
+                        <option value="Verification_Form">Account Verification Form</option>
+                        <option value="General_Feedback">General Feedback / Suggestion</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="entity-group" style="display:none;">
+                    <label for="related-entity">Related to (optional)</label>
+                    <select id="related-entity-type" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;margin-bottom:8px;">
+                        <option value="None">Not linked to a specific item</option>
+                        <option value="Transaction">An order / transaction</option>
+                        <option value="Book_Listing">A book listing</option>
+                        <option value="User">A user account</option>
+                    </select>
+                    <input type="number" id="related-entity-id" min="1"
+                        placeholder="Enter the ID (e.g. Order #5, Listing #12, User #3)"
+                        style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box;display:none;">
+                </div>
+
+                <div class="form-group">
+                    <label for="report-details">Description <small style="color:var(--text-gray,#777);">(10–2000 characters)</small></label>
+                    <textarea id="report-details" rows="6" maxlength="2000" required
+                        placeholder="Describe the issue clearly. Include any relevant details, dates, or screenshots you have."
+                        style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;resize:vertical;box-sizing:border-box;"></textarea>
+                    <small id="details-count" style="color:var(--text-gray,#777);font-size:12px;float:right;">0 / 2000</small>
+                </div>
+
+                <button type="submit" id="report-submit-btn" class="auth-submit-btn" style="width:100%;">
+                    <span>Submit Report</span>
+                </button>
+            </form>
+        </section>
+    </main>
+
+    <footer>
+        <p>Librowse Book Exchange &copy; 2024 &bull; ITS122P Final Project</p>
+    </footer>
+
+    <script src="session.js"></script>
+    <script>
+    (function () {
+        function apiBase() {
+            if (window.LIBROWSE_API_BASE) return String(window.LIBROWSE_API_BASE).replace(/\/$/, '');
+            if (window.location.port === '8000') return `${window.location.protocol}//${window.location.hostname}:8000/api`;
+            return '/api';
+        }
+
+        function showMsg(text, type) {
+            const el = document.getElementById('page-message');
+            el.style.display = '';
+            el.className = 'auth-message ' + (type || 'info');
+            el.innerHTML = text;
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function authHeaders() {
+            const token = sessionStorage.getItem('librowseSessionToken');
+            return { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
+        }
+
+        const user = JSON.parse(sessionStorage.getItem('librowseCurrentUser') || 'null');
+        if (!user) {
+            showMsg('Please <a href="login.html">sign in</a> to submit a report.', 'error');
+            document.getElementById('report-form').style.display = 'none';
+        }
+
+        // Show entity group when a category is selected
+        document.getElementById('report-category').addEventListener('change', function () {
+            document.getElementById('entity-group').style.display = this.value ? '' : 'none';
+        });
+
+        // Show/hide entity ID input
+        document.getElementById('related-entity-type').addEventListener('change', function () {
+            const idInput = document.getElementById('related-entity-id');
+            idInput.style.display = this.value !== 'None' ? '' : 'none';
+            if (this.value === 'None') idInput.value = '';
+        });
+
+        document.getElementById('report-details').addEventListener('input', function () {
+            document.getElementById('details-count').textContent = this.value.length + ' / 2000';
+        });
+
+        document.getElementById('report-form').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const category   = document.getElementById('report-category').value;
+            const entityType = document.getElementById('related-entity-type').value;
+            const entityId   = document.getElementById('related-entity-id').value;
+            const details    = document.getElementById('report-details').value.trim();
+
+            if (!category)            return showMsg('Please select a report type.', 'error');
+            if (details.length < 10)  return showMsg('Please describe the issue in at least 10 characters.', 'error');
+
+            const formData = { details };
+            if (entityType !== 'None' && entityId) formData.entity_id = Number(entityId);
+
+            const body = {
+                report_category:      category,
+                related_entity_type:  entityType,
+                form_data:            JSON.stringify(formData),
+            };
+
+            const btn = document.getElementById('report-submit-btn');
+            btn.disabled = true;
+            btn.querySelector('span').textContent = 'Submitting…';
+            try {
+                const res  = await fetch(apiBase() + '/reports.php', {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showMsg('Your report has been submitted successfully. Our team will review it soon.', 'success');
+                    document.getElementById('report-form').reset();
+                    document.getElementById('entity-group').style.display = 'none';
+                    document.getElementById('details-count').textContent = '0 / 2000';
+                } else {
+                    showMsg(data.error || 'Failed to submit report.', 'error');
+                }
+            } catch {
+                showMsg('Could not connect to the server. Please try again.', 'error');
+            } finally {
+                btn.disabled = false; btn.querySelector('span').textContent = 'Submit Report';
+            }
+        });
+    })();
+    </script>
+</body>
+</html>
