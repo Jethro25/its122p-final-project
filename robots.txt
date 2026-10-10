@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /book-marketplace-backend/
+
+Sitemap: https://its122p-final-project-its122finalproject.vercel.app/sitemap.xml

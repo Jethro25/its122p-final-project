@@ -122,7 +122,7 @@
         const btn = document.getElementById('feedback-modal-submit');
         btn.disabled = true; btn.querySelector('span').textContent = 'Submitting…';
         try {
-            const res  = await fetch(apiBase() + '/feedback.php', {
+            const res  = await fetch(apiBase() + '/reports.php?action=feedback', {
                 method: 'POST', headers: authHeaders(), body: JSON.stringify(payload),
             });
             const data = await res.json();

@@ -23,8 +23,6 @@
     }
   ],
   "rewrites": [
-    { "source": "/robots.txt", "destination": "/api/robots.php" },
-    { "source": "/sitemap.xml", "destination": "/api/sitemap.php" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/", "destination": "/book-marketplace-frontend/index.html" },
     { "source": "/((?!api/).*)", "destination": "/book-marketplace-frontend/$1" }
